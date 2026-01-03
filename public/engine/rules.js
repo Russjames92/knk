@@ -449,9 +449,35 @@ export function getLegalIntents(state, side) {
   for (const cid of hand) {
     const kind = state.cardInstances[cid]?.kind;
     if (!kind) continue;
-
-    intents.push(...genMoveIntents(state, side, cid, kind));
-    intents.push(...genNobleIntents(state, side, cid, kind));
+  
+    // PAWN: can place pawns (from reserve) AND move pawn pieces
+    if (kind === "PAWN") {
+      intents.push(...genPlaceForKind(state, side, cid, kind)); // pawn reserve -> 2nd rank
+      intents.push(...genMoveIntents(state, side, cid, kind));  // pawn moves only
+      continue;
+    }
+  
+    // KNIGHT: move permission for any active piece
+    if (kind === "KNIGHT") {
+      intents.push(...genMoveIntents(state, side, cid, kind));
+      continue;
+    }
+  
+    // KING: noble only (king is always active; no placing king)
+    if (kind === "KING") {
+      intents.push(...genNobleIntents(state, side, cid, kind));
+      continue;
+    }
+  
+    // ROOK / BISHOP / QUEEN:
+    // If the matching piece is inactive, this card places it.
+    // If it is already active, this card does the noble ability.
+    if (kind === "ROOK" || kind === "BISHOP" || kind === "QUEEN") {
+      const hasInactive = hasInactivePieceForKind(state, side, kind);
+      if (hasInactive) intents.push(...genPlaceForKind(state, side, cid, kind));
+      else intents.push(...genNobleIntents(state, side, cid, kind));
+      continue;
+    }
   }
 
   // Filter by check rule:
@@ -480,6 +506,56 @@ export function getLegalIntents(state, side) {
   }
 
   return legal;
+}
+
+function kindToPieceType(kind) {
+  return { PAWN: "P", KNIGHT: "N", KING: "K", ROOK: "R", BISHOP: "B", QUEEN: "Q" }[kind] || null;
+}
+
+function hasInactivePieceForKind(state, side, kind) {
+  const t = kindToPieceType(kind);
+  if (!t) return false;
+  // King is never placeable after setup in our current model
+  if (t === "K") return false;
+  return Object.values(state.pieces).some(p => p.side === side && p.type === t && p.status === "INACTIVE");
+}
+
+/**
+ * Placement rules:
+ * - PAWN -> 2nd rank (W=2, B=7), any empty file
+ * - ROOK/BISHOP/QUEEN -> back rank (W=1, B=8), any empty file
+ * - KING not placeable here (setup already placed it)
+ * - KNIGHT not placeable via card (setup already places both)
+ */
+function genPlaceForKind(state, side, cid, kind) {
+  const t = kindToPieceType(kind);
+  if (!t) return [];
+  if (t === "K" || t === "N") return []; // handled elsewhere
+
+  const out = [];
+  const inactive = Object.values(state.pieces)
+    .filter(p => p.side === side && p.type === t && p.status === "INACTIVE");
+
+  if (inactive.length === 0) return [];
+
+  const backRank = side === "W" ? 1 : 8;
+  const pawnRank = side === "W" ? 2 : 7;
+  const targetRank = (t === "P") ? pawnRank : backRank;
+
+  for (const p of inactive) {
+    for (const f of FILES) {
+      const to = `${f}${targetRank}`;
+      if (state.board[to]) continue;
+
+      out.push({
+        kind: "TURN",
+        side,
+        play: { type: "SINGLE", cardIds: [cid] },
+        action: { type: "PLACE", payload: { pieceId: p.id, to } }
+      });
+    }
+  }
+  return out;
 }
 
 // ---------- Intent generators ----------
