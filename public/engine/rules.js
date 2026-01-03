@@ -225,11 +225,9 @@ function validateComboMorph(state, intent) {
   assert(p.square === from, "From mismatch");
 
   if (mode === "OTHER_AS_KNIGHT") {
-    // represented back-rank piece moves like a knight
     const legal = genKnightDests(state, from, intent.side).includes(to);
     assert(legal, "Illegal knight-morph move");
   } else {
-    // knight moves like KING/ROOK/BISHOP/QUEEN
     const legal = genAsOtherDests(state, from, intent.side, otherKind).includes(to);
     assert(legal, "Illegal piece-morph move");
   }
@@ -272,7 +270,6 @@ function applyIntentMut(state, intent) {
     const turn = state.phase.turn;
 
     if (intent.action.type === "NOBLE_QUEEN_MOVE_EXTRA_TURN") {
-      // Queen noble grants another full turn sequence
       turn.extraTurnQueue += 1;
     }
 
@@ -379,7 +376,6 @@ function applyAction(state, intent) {
     }
 
     case "COMBO_NX_MORPH": {
-      // validation already enforced movement pattern; we just execute the move
       const { pieceId, to } = a.payload;
       return movePiece(state, intent.side, pieceId, to);
     }
@@ -497,13 +493,8 @@ export function getLegalIntents(state, side) {
     const kind = state.cardInstances[cid]?.kind;
     if (!kind) continue;
 
-    // Place action (any piece card) IF piece(s) of that type are inactive and squares allow it
     intents.push(...genPlaceIntents(state, side, cid, kind));
-
-    // Move action (only pawn/knight)
     intents.push(...genMoveActionIntents(state, side, cid, kind));
-
-    // Noble action (only king/rook/queen/bishop)
     intents.push(...genNobleIntents(state, side, cid, kind));
   }
 
@@ -546,7 +537,6 @@ function genPlaceIntents(state, side, cid, kind) {
   const pType = map[kind];
   if (!pType) return [];
 
-  // piece must be INACTIVE to be placed (available)
   const inactive = Object.values(state.pieces).filter(
     (p) => p.side === side && p.type === pType && p.status === "INACTIVE"
   );
@@ -691,22 +681,31 @@ function genNobleIntents(state, side, cid, kind) {
         const kingFrom = king.square;
         const kingMoves = generateMovesStandard(state, kingId);
 
-        // after moving king, we can move ANY piece with standard rules
         for (const km of kingMoves) {
-          // simulate king move first to know followup move legality space
-          const afterKing = applyIntentStrict(state, {
-            kind: "TURN",
-            side,
-            play: { type: "SINGLE", cardIds: [cid] },
-            action: { type: "MOVE_STANDARD", payload: { pieceId: kingId, from: kingFrom, to: km.to } }
-          });
+          // IMPORTANT: this simulation can be illegal; never let enumeration crash.
+          let afterKing;
+          try {
+            afterKing = applyIntentStrict(state, {
+              kind: "TURN",
+              side,
+              play: { type: "SINGLE", cardIds: [cid] },
+              action: { type: "MOVE_STANDARD", payload: { pieceId: kingId, from: kingFrom, to: km.to } }
+            });
+          } catch {
+            continue;
+          }
 
-          // king must be out of check immediately after king move
           if (isInCheck(afterKing, side)) continue;
 
           for (const p of Object.values(afterKing.pieces)) {
             if (p.side !== side || p.status !== "ACTIVE") continue;
-            for (const m of generateMovesStandard(afterKing, p.id)) {
+
+            // generateMovesStandard is safe here; but still keep enumeration resilient
+            let moves;
+            try { moves = generateMovesStandard(afterKing, p.id); }
+            catch { continue; }
+
+            for (const m of moves) {
               out.push({
                 kind: "TURN",
                 side,
@@ -770,6 +769,30 @@ function genComboIntents(state, side) {
   return out;
 }
 
+/**
+ * PATCH: safe simulation helper for combo generation.
+ * This mutates ONLY the board/pieces/result by performing a single move,
+ * and does NOT enforce "ended turn in check" (because a combo can resolve check on later hop).
+ */
+function simulateMoveOnly(state, moverSide, pieceId, to, opts = {}) {
+  const s = clone(state);
+  // If the moving piece isn't active / has no square, just return null
+  const p = s.pieces[pieceId];
+  if (!p || p.status !== "ACTIVE" || !p.square) return null;
+
+  // movePiece can throw (e.g. capture own piece / forbidCapture); treat as invalid simulation
+  try {
+    movePiece(s, moverSide, pieceId, to, opts);
+  } catch {
+    return null;
+  }
+
+  // Keep threat fields updated for any generators that rely on them
+  s.threat.inCheck.W = isInCheck(s, "W");
+  s.threat.inCheck.B = isInCheck(s, "B");
+  return s;
+}
+
 function genComboNN(state, side, cardIds) {
   const out = [];
 
@@ -779,15 +802,34 @@ function genComboNN(state, side, cardIds) {
   if (knights.length === 0) return out;
 
   // Mode A: move ONE knight twice (sequence)
+  // PATCH: do NOT use applyIntentStrict for the intermediate hop.
   for (const n of knights) {
     const firstMoves = generateMovesStandard(state, n.id);
+
     for (const m1 of firstMoves) {
-      const after1 = applyIntentStrict(state, {
-        kind: "TURN",
-        side,
-        play: { type: "COMBO", cardIds },
-        action: { type: "MOVE_STANDARD", payload: { pieceId: n.id, from: m1.from, to: m1.to } }
-      });
+      const after1 = simulateMoveOnly(state, side, n.id, m1.to);
+      if (!after1) continue;
+
+      // If the first hop captured the enemy king, the game is already terminal.
+      // We still generate a DOUBLE intent; the second hop will never execute because applyAction short-circuits.
+      if (after1.result.status === "WIN" && after1.result.reason === "KING_CAPTURED") {
+        out.push({
+          kind: "TURN",
+          side,
+          play: { type: "COMBO", cardIds },
+          action: {
+            type: "COMBO_NN",
+            payload: {
+              mode: "DOUBLE",
+              double: {
+                pieceId: n.id,
+                moves: [{ to: m1.to }, { to: m1.to }]
+              }
+            }
+          }
+        });
+        continue;
+      }
 
       const secondMoves = generateMovesStandard(after1, n.id);
       for (const m2 of secondMoves) {
@@ -812,7 +854,6 @@ function genComboNN(state, side, cardIds) {
 
   // Mode B: move BOTH knights once each
   if (knights.length >= 2) {
-    // Use distinct knight ids
     for (let i = 0; i < knights.length; i++) {
       for (let j = 0; j < knights.length; j++) {
         if (i === j) continue;
@@ -823,7 +864,7 @@ function genComboNN(state, side, cardIds) {
 
         for (const ma of movesA) {
           for (const mb of movesB) {
-            if (ma.to === mb.to) continue; // cannot end on same square
+            if (ma.to === mb.to) continue;
             out.push({
               kind: "TURN",
               side,
@@ -877,7 +918,6 @@ function genComboNX(state, side, cardIds, otherKind) {
   }
 
   // Option 2: move the represented back-rank piece like a knight
-  // (King/Rook/Queen/Bishop piece moves in L shape for one turn)
   const typeMap = { KING: "K", ROOK: "R", QUEEN: "Q", BISHOP: "B" };
   const targetType = typeMap[otherKind];
 
@@ -949,7 +989,6 @@ function genKnightDests(state, from, side) {
 
 function genAsOtherDests(state, from, side, otherKind) {
   if (otherKind === "KING") {
-    // king-like: adjacent (capture allowed)
     const out = [];
     const f0 = from.charCodeAt(0);
     const r0 = Number(from[1]);
