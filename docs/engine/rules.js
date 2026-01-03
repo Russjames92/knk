@@ -384,7 +384,12 @@ function genSingle(state, side, cardId) {
   }
 
   if (kind === "PAWN") {
-    return genPawnStandard(state, side, { type: "SINGLE", cardIds: [cardId] });
+    const out = [];
+    // ✅ allow placing a pawn if one is in hand
+    out.push(...genPlace(state, side, cardId));
+    // ✅ also allow moving existing pawns (if any are already active)
+    out.push(...genPawnStandard(state, side, { type: "SINGLE", cardIds: [cardId] }));
+    return out;
   }
 
   const out = [];
