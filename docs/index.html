@@ -8,14 +8,14 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">Knights & Kings</div>
-    <div id="status" class="status">Offline</div>
+    <div class="brand">Knights &amp; Kings</div>
+    <div class="status" id="status">Offline (GitHub Pages)</div>
 
-    <div class="actions">
-      <button id="btnNew">New Game</button>
+    <div class="topActions">
+      <button id="btnNewGame">New Game</button>
       <button id="btnReset">Reset</button>
       <label class="toggle">
-        <input type="checkbox" id="aiToggle" />
+        <input id="chkAI" type="checkbox" />
         <span>Vs AI (Black)</span>
       </label>
     </div>
@@ -24,26 +24,30 @@
   <main class="layout">
     <section class="panel">
       <h2>Game</h2>
-      <div id="phasePill" class="pill"></div>
-      <div id="turnPill" class="pill"></div>
-      <div id="checkPill" class="pill"></div>
-
-      <h3>Action</h3>
-      <div class="hint" id="hint"></div>
-
-      <div class="row">
-        <button id="btnPlaySingle" disabled>Play Single</button>
-        <button id="btnPlayCombo" disabled>Play Combo</button>
-        <button id="btnClear" disabled>Clear</button>
+      <div class="pillRow">
+        <span class="pill" id="pillStage">Stage: -</span>
+        <span class="pill" id="pillTurn">Turn: -</span>
+      </div>
+      <div class="pillRow">
+        <span class="pill" id="pillCheck">Check: -</span>
       </div>
 
-      <div class="row">
-        <button id="btnConfirm" disabled>Confirm</button>
-        <button id="btnEndTurn" disabled>End Turn</button>
+      <h3>Action</h3>
+      <div class="hint" id="hint">—</div>
+
+      <div class="btnRow">
+        <button id="btnPlaySingle">Play Single</button>
+        <button id="btnPlayCombo">Play Combo</button>
+        <button id="btnClear">Clear</button>
+      </div>
+
+      <div class="btnRow">
+        <button id="btnConfirm">Confirm</button>
+        <button id="btnEndTurn">End Turn</button>
       </div>
 
       <h3>Debug</h3>
-      <pre id="info"></pre>
+      <pre class="debug" id="debug"></pre>
     </section>
 
     <section class="boardWrap">
@@ -55,9 +59,23 @@
       <div id="hand" class="hand"></div>
 
       <h3>Log</h3>
-      <div id="log" class="log"></div>
+      <pre id="log" class="log"></pre>
     </section>
   </main>
+
+  <!-- Action chooser modal -->
+  <div id="actionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="actionModalTitle">
+    <div class="modalBackdrop"></div>
+    <div class="modalCard">
+      <div class="modalHeader">
+        <h3 id="actionModalTitle">Choose your action</h3>
+      </div>
+      <div id="actionModalOptions" class="modalOptions"></div>
+      <div class="modalFooter">
+        <button id="btnActionCancel" class="modalCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./app.js"></script>
 </body>
