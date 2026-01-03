@@ -235,14 +235,27 @@ function evaluateState(st, povSide) {
 /* ---------------- Apply + render ---------------- */
 
 function stepApply(intent) {
-  state = applyIntentStrict(state, intent);
+  try {
+    state = applyIntentStrict(state, intent);
+  } catch (err) {
+    console.error("Apply failed:", err);
+    elHint.textContent = `Illegal move: ${err?.message || err}`;
+    return;
+  }
 
   selectedCards = [];
   lockedPlay = null;
   builder = null;
   pendingIntent = null;
 
-  tick();
+  try {
+    tick();
+  } catch (err) {
+    console.error("Tick failed:", err);
+    elHint.textContent = `Engine error during tick: ${err?.message || err}`;
+    // keep the already-applied state visible
+  }
+
   render();
 }
 
