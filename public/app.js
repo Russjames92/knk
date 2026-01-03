@@ -7,8 +7,13 @@ import { createNewGameState } from "./engine/state.js";
 import { drawToEight, applyIntentStrict } from "./engine/rules.js";
 
 const firebaseConfig = {
-  // TODO: paste your config
-};
+    apiKey: "AIzaSyBD8W2tS2BVpei46H_W4GJ9nOUM4AF2lQo",
+    authDomain: "knk-ecg.firebaseapp.com",
+    projectId: "knk-ecg",
+    storageBucket: "knk-ecg.firebasestorage.app",
+    messagingSenderId: "992239709436",
+    appId: "1:992239709436:web:edcec37ba6de5148df3b79"
+  };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
