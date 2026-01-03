@@ -35,10 +35,16 @@ let builder = null;
  builder shapes:
  - null
  - { mode:"GENERIC", pieceId:null|id, to:null|sq }   // most intents
- - { mode:"NN_DOUBLE", pieceId:null|id, to1:null|sq, to2:null|sq }
- - { mode:"NN_SPLIT", aId:null|id, aTo:null|sq, bId:null|id, bTo:null|sq }
  - { mode:"ROOK_SWAP", aId:null|id, bId:null|id }
- - { mode:"BISHOP_BLOCK", kingTo:null|sq } // minimal (we’ll upgrade later)
+ - { mode:"NN_AUTO",
+      phase:"PICK_KNIGHT1"|"PICK_TO1"|"CHOOSE_SPLIT_OR_DOUBLE"|"PICK_KNIGHT2"|"PICK_TO2"|"PICK_DOUBLE_TO2"|"DONE",
+      k1:null|id, to1:null|sq,
+      k2:null|id, to2:null|sq,
+      doubleTo2:null|sq,
+      // optional shortcut: second click was a 2-move-only final square
+      forcedFinal:null|sq,
+      possibleDoubleIntents:null|array
+   }
 */
 
 let pendingIntent = null;
@@ -100,7 +106,7 @@ function startNewGame() {
   render();
 }
 
-/* ---------------- AI ---------------- */
+/* ---------------- AI (unchanged) ---------------- */
 
 function tick() {
   state = serverAdvanceDrawPhase(state);
@@ -112,9 +118,8 @@ function tick() {
       const legal = getLegalIntents(state, "B");
       if (legal.length === 0) break;
 
-      // Always take immediate king capture
       const win = legal.find((it) => isImmediateKingCapture(state, it));
-      const choice = win || chooseBestAIIntent(state, "B", 2); // minimax depth 2
+      const choice = win || chooseBestAIIntent(state, "B", 2);
 
       state = applyIntentStrict(state, choice);
       state = serverAdvanceDrawPhase(state);
@@ -138,7 +143,6 @@ function chooseBestAIIntent(st, side, depth) {
   const legal = getLegalIntents(st, side);
   if (legal.length === 0) return legal[0];
 
-  // quick pre-score to limit branching
   const scored = legal.map((it) => {
     let next;
     try { next = applyIntentStrict(st, it); } catch { next = null; }
@@ -146,9 +150,8 @@ function chooseBestAIIntent(st, side, depth) {
     return { it, s };
   }).sort((a,b)=> b.s - a.s);
 
-  const top = scored.slice(0, 24); // cap branching
+  const top = scored.slice(0, 24);
 
-  // minimax
   let best = top[0]?.it || legal[0];
   let bestScore = -Infinity;
 
@@ -156,9 +159,7 @@ function chooseBestAIIntent(st, side, depth) {
     let next;
     try { next = applyIntentStrict(st, it); } catch { continue; }
 
-    if (next.result.status === "WIN" && next.result.winner === side) {
-      return it; // forced win
-    }
+    if (next.result.status === "WIN" && next.result.winner === side) return it;
 
     const score = minimax(next, otherSide(side), side, depth - 1);
     if (score > bestScore) {
@@ -170,7 +171,6 @@ function chooseBestAIIntent(st, side, depth) {
 }
 
 function minimax(st, toMove, maximizingSide, depth) {
-  // terminal
   if (st.result.status !== "ONGOING") {
     if (st.result.winner === maximizingSide) return 999999;
     return -999999;
@@ -178,13 +178,8 @@ function minimax(st, toMove, maximizingSide, depth) {
   if (depth <= 0) return evaluateState(st, maximizingSide);
 
   const legal = getLegalIntents(st, toMove);
-  if (legal.length === 0) {
-    // no legal plays — evaluation handles checkmate-like outcomes via result in rules,
-    // but if it slips through, treat as bad for toMove
-    return evaluateState(st, maximizingSide);
-  }
+  if (legal.length === 0) return evaluateState(st, maximizingSide);
 
-  // prioritize king captures at all depths
   const win = legal.find((it) => isImmediateKingCapture(st, it));
   if (win) {
     const next = applyIntentStrict(st, win);
@@ -194,9 +189,7 @@ function minimax(st, toMove, maximizingSide, depth) {
   const isMax = (toMove === maximizingSide);
   let best = isMax ? -Infinity : Infinity;
 
-  // limit branching
   const quick = legal.slice(0, 28);
-
   for (const it of quick) {
     let next;
     try { next = applyIntentStrict(st, it); } catch { continue; }
@@ -210,15 +203,14 @@ function minimax(st, toMove, maximizingSide, depth) {
 function otherSide(s){ return s === "W" ? "B" : "W"; }
 
 function evaluateState(st, povSide) {
-  // big win/loss handled in minimax terminal, but keep safe
   if (st.result.status !== "ONGOING") {
     if (st.result.winner === povSide) return 999999;
     return -999999;
   }
 
   const val = { K: 10000, Q: 900, R: 500, B: 330, N: 320, P: 100 };
-
   let w = 0, b = 0;
+
   for (const p of Object.values(st.pieces)) {
     if (p.status !== "ACTIVE") continue;
     const v = val[p.type] || 0;
@@ -226,13 +218,11 @@ function evaluateState(st, povSide) {
   }
 
   let score = (povSide === "W" ? (w - b) : (b - w));
-
-  // check pressure
   const opp = otherSide(povSide);
+
   if (st.threat?.inCheck?.[opp]) score += 120;
   if (st.threat?.inCheck?.[povSide]) score -= 200;
 
-  // small mobility bonus (avoid freezing)
   try {
     const myMoves = getLegalIntents(st, povSide).length;
     const oppMoves = getLegalIntents(st, opp).length;
@@ -247,7 +237,6 @@ function evaluateState(st, povSide) {
 function stepApply(intent) {
   state = applyIntentStrict(state, intent);
 
-  // reset planning UI after action
   selectedCards = [];
   lockedPlay = null;
   builder = null;
@@ -308,7 +297,6 @@ function renderHintAndButtons() {
     return;
   }
 
-  // TURN / PLAY
   if (!lockedPlay) {
     elHint.textContent = "Select cards, then click Play Single or Play Combo to lock your action.";
     if (selectedCards.length === 1) btnPlaySingle.disabled = false;
@@ -316,24 +304,16 @@ function renderHintAndButtons() {
     return;
   }
 
-  // Locked: show minimal guidance without hints
   if (!builder) builder = inferBuilderMode();
 
-  if (builder.mode === "NN_DOUBLE") {
-    const a = builder;
-    if (!a.pieceId) elHint.textContent = "NN DOUBLE: Click a knight to move twice.";
-    else if (!a.to1) elHint.textContent = "NN DOUBLE: Click first destination.";
-    else if (!a.to2) elHint.textContent = "NN DOUBLE: Click second destination.";
-    else elHint.textContent = pendingIntent ? "Legal selection. Click Confirm." : "Not legal for these cards.";
-    return;
-  }
-
-  if (builder.mode === "NN_SPLIT") {
-    const a = builder;
-    if (!a.aId) elHint.textContent = "NN SPLIT: Click first knight.";
-    else if (!a.aTo) elHint.textContent = "NN SPLIT: Click destination for first knight.";
-    else if (!a.bId) elHint.textContent = "NN SPLIT: Click second knight.";
-    else if (!a.bTo) elHint.textContent = "NN SPLIT: Click destination for second knight.";
+  if (builder.mode === "NN_AUTO") {
+    const b = builder;
+    if (b.phase === "PICK_KNIGHT1") elHint.textContent = "NN: Click a knight.";
+    else if (b.phase === "PICK_TO1") elHint.textContent = "NN: Click a destination for that knight.";
+    else if (b.phase === "CHOOSE_SPLIT_OR_DOUBLE") elHint.textContent = "NN: Click another knight to SPLIT, or click a square to move the same knight again (DOUBLE).";
+    else if (b.phase === "PICK_KNIGHT2") elHint.textContent = "NN SPLIT: Click second knight.";
+    else if (b.phase === "PICK_TO2") elHint.textContent = "NN SPLIT: Click destination for second knight.";
+    else if (b.phase === "PICK_DOUBLE_TO2") elHint.textContent = "NN DOUBLE: Click second destination.";
     else elHint.textContent = pendingIntent ? "Legal selection. Click Confirm." : "Not legal for these cards.";
     return;
   }
@@ -383,16 +363,13 @@ function renderBoard() {
   const files = ["a","b","c","d","e","f","g","h"];
   const selSquares = new Set();
 
-  // show only what the player clicked (no legal hints)
-  if (builder?.mode === "NN_DOUBLE") {
-    if (builder.pieceId) selSquares.add(state.pieces[builder.pieceId]?.square);
+  if (builder?.mode === "NN_AUTO") {
+    if (builder.k1) selSquares.add(state.pieces[builder.k1]?.square);
     if (builder.to1) selSquares.add(builder.to1);
+    if (builder.k2) selSquares.add(state.pieces[builder.k2]?.square);
     if (builder.to2) selSquares.add(builder.to2);
-  } else if (builder?.mode === "NN_SPLIT") {
-    if (builder.aId) selSquares.add(state.pieces[builder.aId]?.square);
-    if (builder.aTo) selSquares.add(builder.aTo);
-    if (builder.bId) selSquares.add(state.pieces[builder.bId]?.square);
-    if (builder.bTo) selSquares.add(builder.bTo);
+    if (builder.doubleTo2) selSquares.add(builder.doubleTo2);
+    if (builder.forcedFinal) selSquares.add(builder.forcedFinal);
   } else if (builder?.mode === "ROOK_SWAP") {
     if (builder.aId) selSquares.add(state.pieces[builder.aId]?.square);
     if (builder.bId) selSquares.add(state.pieces[builder.bId]?.square);
@@ -442,9 +419,7 @@ function onSquareClick(square) {
 
   const side = lockedPlay.side;
   const clickedPid = state.board?.[square] || null;
-  const clickedPiece = clickedPid ? state.pieces[clickedPid] : null;
 
-  // helper
   const isMyActivePiece = (pid) => {
     const p = pid ? state.pieces[pid] : null;
     return !!(p && p.side === side && p.status === "ACTIVE");
@@ -458,48 +433,80 @@ function onSquareClick(square) {
     return !!(p && p.side === side && p.status === "ACTIVE" && p.type !== "P");
   };
 
-  // NN DOUBLE builder
-  if (builder.mode === "NN_DOUBLE") {
-    if (!builder.pieceId) {
-      if (isMyActiveKnight(clickedPid)) {
-        builder.pieceId = clickedPid;
-        builder.to1 = null; builder.to2 = null;
-      }
-    } else if (!builder.to1) {
-      builder.to1 = square;
-    } else if (!builder.to2) {
-      builder.to2 = square;
-    } else {
-      // if user clicks again, restart to2 as last click
-      builder.to2 = square;
-    }
-    pendingIntent = findPendingFromBuilder();
-    render();
-    return;
-  }
+  // NN AUTO
+  if (builder.mode === "NN_AUTO") {
+    const b = builder;
 
-  // NN SPLIT builder
-  if (builder.mode === "NN_SPLIT") {
-    if (!builder.aId) {
+    if (b.phase === "PICK_KNIGHT1") {
       if (isMyActiveKnight(clickedPid)) {
-        builder.aId = clickedPid;
-        builder.aTo = null; builder.bId = null; builder.bTo = null;
+        b.k1 = clickedPid;
+        b.phase = "PICK_TO1";
       }
-    } else if (!builder.aTo) {
-      builder.aTo = square;
-    } else if (!builder.bId) {
-      if (isMyActiveKnight(clickedPid) && clickedPid !== builder.aId) {
-        builder.bId = clickedPid;
-        builder.bTo = null;
-      }
-    } else if (!builder.bTo) {
-      builder.bTo = square;
-    } else {
-      builder.bTo = square;
+      pendingIntent = findPendingFromBuilder();
+      render();
+      return;
     }
-    pendingIntent = findPendingFromBuilder();
-    render();
-    return;
+
+    if (b.phase === "PICK_TO1") {
+      // Decide if this click is a 2-move-only final square shortcut (your hierarchy idea)
+      const info = analyzeNNClick(b.k1, square);
+      if (info.shortcutFinal && info.uniqueDoubleIntent) {
+        // lock a forced DOUBLE intent immediately
+        b.forcedFinal = square;
+        b.possibleDoubleIntents = null;
+        pendingIntent = info.uniqueDoubleIntent;
+        b.phase = "DONE";
+      } else {
+        // normal: treat as first move destination (could lead to split or double)
+        b.to1 = square;
+        b.phase = "CHOOSE_SPLIT_OR_DOUBLE";
+        pendingIntent = findPendingFromBuilder();
+      }
+      render();
+      return;
+    }
+
+    if (b.phase === "CHOOSE_SPLIT_OR_DOUBLE") {
+      // If they click another knight => SPLIT
+      if (isMyActiveKnight(clickedPid) && clickedPid !== b.k1) {
+        b.k2 = clickedPid;
+        b.phase = "PICK_TO2";
+        pendingIntent = findPendingFromBuilder();
+        render();
+        return;
+      }
+      // Otherwise treat it as DOUBLE second destination
+      b.doubleTo2 = square;
+      b.phase = "DONE";
+      pendingIntent = findPendingFromBuilder();
+      render();
+      return;
+    }
+
+    if (b.phase === "PICK_TO2") {
+      b.to2 = square;
+      b.phase = "DONE";
+      pendingIntent = findPendingFromBuilder();
+      render();
+      return;
+    }
+
+    // DONE: clicking again lets them revise the last meaningful field
+    if (b.phase === "DONE") {
+      // easiest reset behavior: if they click a knight, restart from that knight
+      if (isMyActiveKnight(clickedPid)) {
+        builder = { mode:"NN_AUTO", phase:"PICK_TO1", k1: clickedPid, to1:null, k2:null, to2:null, doubleTo2:null, forcedFinal:null, possibleDoubleIntents:null };
+        pendingIntent = null;
+      } else {
+        // otherwise overwrite last target
+        if (b.k2 && b.to2) b.to2 = square;
+        else if (b.doubleTo2) b.doubleTo2 = square;
+        else b.to1 = square;
+        pendingIntent = findPendingFromBuilder();
+      }
+      render();
+      return;
+    }
   }
 
   // Rook swap builder
@@ -509,7 +516,6 @@ function onSquareClick(square) {
     } else if (!builder.bId) {
       if (isMyActiveNonPawn(clickedPid) && clickedPid !== builder.aId) builder.bId = clickedPid;
     } else {
-      // reset to new first selection
       builder.aId = (isMyActiveNonPawn(clickedPid) ? clickedPid : builder.aId);
       builder.bId = null;
     }
@@ -522,7 +528,7 @@ function onSquareClick(square) {
   if (builder.mode === "GENERIC") {
     if (!builder.pieceId) {
       if (isMyActivePiece(clickedPid)) builder.pieceId = clickedPid;
-      else builder.to = square; // allow PLACE etc.
+      else builder.to = square;
     } else if (!builder.to) {
       builder.to = square;
     } else {
@@ -562,7 +568,6 @@ function handleSetupClick(square) {
 /* ---------------- Builder inference + intent matching ---------------- */
 
 function inferBuilderMode() {
-  // If not locked, no builder
   if (!lockedPlay) return null;
 
   const side = lockedPlay.side;
@@ -576,24 +581,76 @@ function inferBuilderMode() {
     return true;
   });
 
-  // If rook swap exists in candidates -> use rook swap builder
   if (candidates.some((it) => it.action?.type === "NOBLE_ROOK_SWAP")) {
     return { mode: "ROOK_SWAP", aId: null, bId: null };
   }
 
-  // If NN combo exists, decide between DOUBLE/SPLIT builder
-  const nn = candidates.filter((it) => it.action?.type === "COMBO_NN");
-  if (nn.length) {
-    // if any split exists, allow split builder (hardest case)
-    if (nn.some((it) => it.action.payload?.mode === "SPLIT")) {
-      return { mode: "NN_SPLIT", aId: null, aTo: null, bId: null, bTo: null };
-    }
-    // else double
-    return { mode: "NN_DOUBLE", pieceId: null, to1: null, to2: null };
+  // NN exists => always use NN_AUTO (supports split OR double)
+  if (candidates.some((it) => it.action?.type === "COMBO_NN")) {
+    return {
+      mode: "NN_AUTO",
+      phase: "PICK_KNIGHT1",
+      k1: null, to1: null,
+      k2: null, to2: null,
+      doubleTo2: null,
+      forcedFinal: null,
+      possibleDoubleIntents: null
+    };
   }
 
-  // default generic
   return { mode: "GENERIC", pieceId: null, to: null };
+}
+
+/**
+ * Your “hierarchy” inference:
+ * - If clicked square is NOT reachable as a 1-move destination (split or first move of double),
+ *   but IS reachable as the FINAL square (second move) of a double,
+ *   then it's "obviously double".
+ * - If that yields a unique double intent, we auto-select it.
+ */
+function analyzeNNClick(knightId, clickedSquare) {
+  const side = lockedPlay.side;
+  const legal = getLegalIntents(state, side);
+  const want = new Set(lockedPlay.cardIds);
+
+  const nn = legal.filter((it) => {
+    const ids = it.play?.cardIds || [];
+    if (ids.length !== want.size) return false;
+    for (const id of ids) if (!want.has(id)) return false;
+    return it.action?.type === "COMBO_NN";
+  });
+
+  const oneMoveSet = new Set();
+  const finalSet = new Set();
+  const matchingFinal = [];
+
+  for (const it of nn) {
+    const a = it.action;
+    if (a.payload?.mode === "DOUBLE") {
+      if (a.payload.double.pieceId !== knightId) continue;
+      const m0 = a.payload.double.moves?.[0]?.to;
+      const m1 = a.payload.double.moves?.[1]?.to;
+      if (m0) oneMoveSet.add(m0);
+      if (m1) {
+        finalSet.add(m1);
+        if (m1 === clickedSquare) matchingFinal.push(it);
+      }
+    } else if (a.payload?.mode === "SPLIT") {
+      // split’s "one move" squares for this knight
+      const A = a.payload.split.a;
+      const B = a.payload.split.b;
+      if (A?.pieceId === knightId && A?.to) oneMoveSet.add(A.to);
+      if (B?.pieceId === knightId && B?.to) oneMoveSet.add(B.to);
+    }
+  }
+
+  const isOneMove = oneMoveSet.has(clickedSquare);
+  const isFinalOnly = !isOneMove && finalSet.has(clickedSquare);
+
+  return {
+    shortcutFinal: isFinalOnly,
+    uniqueDoubleIntent: (isFinalOnly && matchingFinal.length === 1) ? matchingFinal[0] : null
+  };
 }
 
 function findPendingFromBuilder() {
@@ -608,47 +665,53 @@ function findPendingFromBuilder() {
     return true;
   });
 
-  // NN DOUBLE exact match
-  if (builder.mode === "NN_DOUBLE") {
-    const { pieceId, to1, to2 } = builder;
-    if (!pieceId || !to1 || !to2) return null;
-    return candidates.find((it) => {
-      const a = it.action;
-      if (a.type !== "COMBO_NN") return false;
-      if (a.payload.mode !== "DOUBLE") return false;
-      if (a.payload.double.pieceId !== pieceId) return false;
-      const m = a.payload.double.moves;
-      return m?.[0]?.to === to1 && m?.[1]?.to === to2;
-    }) || null;
-  }
+  // NN AUTO match
+  if (builder?.mode === "NN_AUTO") {
+    const b = builder;
 
-  // NN SPLIT exact match (order-insensitive)
-  if (builder.mode === "NN_SPLIT") {
-    const { aId, aTo, bId, bTo } = builder;
-    if (!aId || !aTo || !bId || !bTo) return null;
+    // If we already forced a unique DOUBLE intent via shortcut, use it
+    if (b.forcedFinal && pendingIntent && pendingIntent.action?.type === "COMBO_NN") {
+      return pendingIntent;
+    }
 
-    return candidates.find((it) => {
-      const a = it.action;
-      if (a.type !== "COMBO_NN") return false;
-      if (a.payload.mode !== "SPLIT") return false;
+    const nn = candidates.filter((it) => it.action?.type === "COMBO_NN");
 
-      const A = a.payload.split.a;
-      const B = a.payload.split.b;
+    // SPLIT: k1+to1 then k2+to2
+    if (b.k1 && b.to1 && b.k2 && b.to2) {
+      return nn.find((it) => {
+        const a = it.action;
+        if (a.payload.mode !== "SPLIT") return false;
+        const A = a.payload.split.a;
+        const B = a.payload.split.b;
 
-      const direct =
-        A.pieceId === aId && A.to === aTo &&
-        B.pieceId === bId && B.to === bTo;
+        const direct =
+          A.pieceId === b.k1 && A.to === b.to1 &&
+          B.pieceId === b.k2 && B.to === b.to2;
 
-      const swapped =
-        A.pieceId === bId && A.to === bTo &&
-        B.pieceId === aId && B.to === aTo;
+        const swapped =
+          A.pieceId === b.k2 && A.to === b.to2 &&
+          B.pieceId === b.k1 && B.to === b.to1;
 
-      return direct || swapped;
-    }) || null;
+        return direct || swapped;
+      }) || null;
+    }
+
+    // DOUBLE: k1+to1 then doubleTo2
+    if (b.k1 && b.to1 && b.doubleTo2) {
+      return nn.find((it) => {
+        const a = it.action;
+        if (a.payload.mode !== "DOUBLE") return false;
+        if (a.payload.double.pieceId !== b.k1) return false;
+        const m = a.payload.double.moves;
+        return m?.[0]?.to === b.to1 && m?.[1]?.to === b.doubleTo2;
+      }) || null;
+    }
+
+    return null;
   }
 
   // Rook swap match
-  if (builder.mode === "ROOK_SWAP") {
+  if (builder?.mode === "ROOK_SWAP") {
     const { aId, bId } = builder;
     if (!aId || !bId) return null;
     return candidates.find((it) => {
@@ -660,7 +723,7 @@ function findPendingFromBuilder() {
   }
 
   // Generic match
-  if (builder.mode === "GENERIC") {
+  if (builder?.mode === "GENERIC") {
     const { pieceId, to } = builder;
     if (!to) return null;
 
@@ -669,11 +732,8 @@ function findPendingFromBuilder() {
       const p = a.payload || {};
       if (p.to !== to) continue;
 
-      // if a pieceId is required, match it; if we haven't selected pieceId,
-      // allow PLACE / resurrect that doesn't rely on active-piece selection.
       if (p.pieceId) {
         if (pieceId && p.pieceId === pieceId) return it;
-        // allow if user didn’t click a piece but intent doesn’t really need a specific active piece (rare)
         continue;
       }
       return it;
