@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /games/{gameId} {
+      allow read: if true;
+
+      // Clients cannot write game state directly.
+      allow create: if true;   // or restrict to authenticated users
+      allow update, delete: if false;
+    }
+  }
+}
