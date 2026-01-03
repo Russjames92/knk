@@ -41,6 +41,25 @@ let pendingIntent = null;    // ready to confirm
 let builder = null;          // TURN move builder
 let setupBuilder = null;     // SETUP knights builder: { firstSq }
 
+function isAITurn() {
+  return (
+    chkAI.checked &&
+    state?.phase?.stage === "TURN" &&
+    state.phase.turn.step === "PLAY" &&
+    state.phase.turn.side === "B"
+  );
+}
+
+function clearUiSelectionState() {
+  selectedCards = [];
+  lockedPlay = null;
+  lockedActionType = null;
+  pendingIntent = null;
+  builder = null;
+  setupBuilder = null;
+  closeActionModal();
+}
+
 /* ---------------- Helpers ---------------- */
 
 function setHint(msg) { elHint.textContent = msg || "—"; }
