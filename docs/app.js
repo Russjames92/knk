@@ -569,6 +569,21 @@ function onSquareClick(square) {
   }
 }
 
+function findKnightDoublePath(state, side, pieceId, finalTo) {
+  // returns [m1To, m2To] or null
+  const firstMoves = generateMovesStandard(state, pieceId); // includes captures
+  for (const m1 of firstMoves) {
+    // simulate first hop (no "ended in check" enforcement mid-combo)
+    const after1 = simulateMoveOnly(state, side, pieceId, m1.to);
+    if (!after1) continue;
+
+    const secondMoves = generateMovesStandard(after1, pieceId);
+    for (const m2 of secondMoves) {
+      if (m2.to === finalTo) return [m1.to, m2.to];
+    }
+  }
+  return null;
+}
 /* ---------------- Setup clicks ---------------- */
 
 function handleSetupClick(square) {
