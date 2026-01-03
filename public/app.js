@@ -1,5 +1,6 @@
 import { newGameState } from "./engine/state.js";
 import { getLegalIntents, applyIntent, evaluateGame, serverAdvanceDrawPhase } from "./engine/rules.js";
+import { ACTION_LABEL, describePlayFromState, describeAction } from "./engine/rulesSpec.js";
 
 /* ---------------- DOM ---------------- */
 
@@ -8,6 +9,7 @@ const elHand = document.getElementById("hand");
 const elLog = document.getElementById("log");
 const elDebug = document.getElementById("debug");
 const elHint = document.getElementById("hint");
+const elReject = document.getElementById("rejectReason");
 
 const pillStage = document.getElementById("pillStage");
 const pillTurn = document.getElementById("pillTurn");
@@ -31,6 +33,7 @@ const btnActionCancel = document.getElementById("btnActionCancel");
 
 let state = null;
 let logLines = [];
+let lastReject = "";
 
 let selectedCards = [];
 let lockedPlay = null;       // { type:"SINGLE"|"COMBO", cardIds:[...], side }
@@ -63,6 +66,11 @@ function clearUiSelectionState() {
 /* ---------------- Helpers ---------------- */
 
 function setHint(msg) { elHint.textContent = msg || "—"; }
+function setReject(msg) {
+  lastReject = msg || "";
+  if (elReject) elReject.textContent = lastReject ? ("Blocked: " + lastReject) : "";
+}
+
 
 function pushLog(line) {
   logLines.push(line);
@@ -236,17 +244,7 @@ function closeActionModal() { actionModal.classList.add("hidden"); }
 btnActionCancel.onclick = () => closeActionModal();
 
 function humanAction(type) {
-  const map = {
-    PLACE: "Place a piece",
-    MOVE_STANDARD: "Standard move",
-    NOBLE_KING_ADJ_NO_CAPTURE: "King Noble (adjacent no-capture)",
-    NOBLE_ROOK_SWAP: "Rook Noble (swap two non-pawns)",
-    NOBLE_QUEEN_MOVE_EXTRA_TURN: "Queen Noble (move + extra turn)",
-    COMBO_NN: "Knight+Knight combo",
-    COMBO_NX_MORPH: "Knight+X morph combo",
-    COMBO_KING_KNIGHT: "King+Knight combo (King moves like a Knight)"
-  };
-  return map[type] || type;
+  return ACTION_LABEL[type] || type;
 }
 
 /* ---------------- Intent finding ---------------- */
@@ -330,6 +328,7 @@ function onSquareClick(sq) {
     const pick = intents.find((it) => it.action?.payload?.to === sq);
     if (!pick) {
       setHint("Not a legal placement square for these cards.");
+      setReject("No matching PLACE intent for that square.");
       pendingIntent = null;
       updateButtons();
       return;
@@ -364,6 +363,9 @@ function onSquareClick(sq) {
 
     if (!pick) {
       setHint("Not legal for these cards.");
+    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
+      ? "You are in check; selected cards produce no check-resolving actions."
+      : "Selected cards produce no legal actions in this position.");
       pendingIntent = null;
       builder.toSq = null;
       updateButtons();
@@ -424,6 +426,7 @@ function handleComboNNClick(sq, intents) {
 
     if (!pick) {
       setHint("Not legal for NN combo.");
+      setReject("No matching NN DOUBLE/SPLIT intent for the chosen squares.");
       pendingIntent = null;
       builder = null;
       updateButtons();
@@ -473,6 +476,7 @@ function handleComboNNClick(sq, intents) {
 
     if (!pick) {
       setHint("Not legal split selection.");
+      setReject("No matching NN SPLIT intent for the chosen pair of moves.");
       pendingIntent = null;
       builder.toSq = null;
       updateButtons();
@@ -508,6 +512,9 @@ btnPlaySingle.onclick = () => {
   const types = availableActionTypesForSelection();
   if (!types.length) {
     setHint("Not legal for these cards.");
+    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
+      ? "You are in check; selected cards produce no check-resolving actions."
+      : "Selected cards produce no legal actions in this position.");
     lockedPlay = null;
     return;
   }
@@ -520,6 +527,9 @@ btnPlayCombo.onclick = () => {
   const types = availableActionTypesForSelection();
   if (!types.length) {
     setHint("Not legal for these cards.");
+    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
+      ? "You are in check; selected cards produce no check-resolving actions."
+      : "Selected cards produce no legal actions in this position.");
     lockedPlay = null;
     return;
   }
@@ -534,6 +544,7 @@ btnClear.onclick = () => {
   setupBuilder = null;
   pendingIntent = null;
   setHint("—");
+  setReject("");
   closeActionModal();
   render();
 };
@@ -577,6 +588,7 @@ function stepApply(intent) {
   }
 
   setHint("—");
+  setReject("");
   render();
 }
 
@@ -687,7 +699,8 @@ function startNewGame() {
   setupBuilder = null;
   pendingIntent = null;
 
-  setHint("Starting game… (click squares to place King, then pick 2 squares for Knights)");
+  setHint("Starting game… Click a back-rank square to place your King. Knights auto-place adjacent.");
+  setReject("");
   closeActionModal();
   render();
 
