@@ -109,20 +109,36 @@ function startNewGame() {
 /* ---------------- AI (unchanged) ---------------- */
 
 function tick() {
-  state = serverAdvanceDrawPhase(state);
+  try {
+    state = serverAdvanceDrawPhase(state);
+  } catch (err) {
+    console.error("serverAdvanceDrawPhase failed:", err);
+    throw err; // let stepApply catch and show message
+  }
 
   while (state.result.status === "ONGOING" && state.phase.stage === "TURN" && state.phase.turn.step === "PLAY") {
     const side = state.phase.turn.side;
 
     if (side === "B" && isAIEnabled()) {
-      const legal = getLegalIntents(state, "B");
+      let legal;
+      try {
+        legal = getLegalIntents(state, "B");
+      } catch (err) {
+        console.error("getLegalIntents failed:", err);
+        throw err;
+      }
       if (legal.length === 0) break;
 
       const win = legal.find((it) => isImmediateKingCapture(state, it));
       const choice = win || chooseBestAIIntent(state, "B", 2);
 
-      state = applyIntentStrict(state, choice);
-      state = serverAdvanceDrawPhase(state);
+      try {
+        state = applyIntentStrict(state, choice);
+        state = serverAdvanceDrawPhase(state);
+      } catch (err) {
+        console.error("AI apply failed:", err);
+        throw err;
+      }
       continue;
     }
     break;
