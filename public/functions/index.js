@@ -3,9 +3,13 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 const db = admin.firestore();
 
+const { applyIntentStrict, serverAdvanceDrawPhase } = require("./shared/engine/rules.cjs");
+
 exports.submitIntent = functions.https.onCall(async (data, context) => {
   const { gameId, intent } = data || {};
-  if (!gameId || !intent) throw new functions.https.HttpsError("invalid-argument", "Missing gameId/intent");
+  if (!gameId || !intent) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing gameId/intent");
+  }
 
   const ref = db.collection("games").doc(gameId);
 
@@ -14,24 +18,40 @@ exports.submitIntent = functions.https.onCall(async (data, context) => {
     if (!snap.exists) throw new functions.https.HttpsError("not-found", "Game not found");
 
     const doc = snap.data();
-    const state = doc.state;
+    let state = doc.state;
     const rev = doc.rev || 0;
 
-    // Minimal server validation gate:
-    if (state.result?.status !== "ONGOING") throw new functions.https.HttpsError("failed-precondition", "Game over");
-    if (state.phase?.stage !== "SETUP" && state.phase?.turn?.side !== intent.side) {
-      throw new functions.https.HttpsError("failed-precondition", "Not your turn");
+    // Server-side: always advance DRAW -> PLAY automatically whenever needed.
+    serverAdvanceDrawPhase(state);
+
+    if (state.result?.status !== "ONGOING") {
+      tx.update(ref, {
+        state,
+        rev: rev + 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: state.result.status
+      });
+      return { ok: true, rev: rev + 1, gameOver: true, result: state.result };
     }
 
-    // TODO (next step): import a shared rules engine and do applyIntentStrict(state,intent)
-    // For now, reject anything except SETUP to prove the wire works.
-    if (intent.kind !== "SETUP") {
-      throw new functions.https.HttpsError("unimplemented", "Server engine not wired yet. Next step will enable all intents.");
+    // Apply the submitted intent authoritatively
+    let next;
+    try{
+      next = applyIntentStrict(state, intent);
+    } catch (e){
+      throw new functions.https.HttpsError("failed-precondition", e.message || "Illegal intent");
     }
 
-    // Accept setup intents temporarily (you’ll replace with full shared validation next step)
-    // Write back unchanged for now:
-    tx.update(ref, { state, rev: rev + 1, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { ok: true, rev: rev + 1 };
+    // After applying, server may need to handle DRAW->PLAY for next actor immediately
+    serverAdvanceDrawPhase(next);
+
+    tx.update(ref, {
+      state: next,
+      rev: rev + 1,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: next.result.status
+    });
+
+    return { ok: true, rev: rev + 1, result: next.result };
   });
 });
