@@ -567,15 +567,18 @@ function tick() {
     return;
   }
 
-  if (
-    chkAI.checked &&
-    state.phase.stage === "TURN" &&
-    state.phase.turn.step === "PLAY" &&
-    state.phase.turn.side === "B" &&
-    state.result?.status === "ONGOING"
-  ) {
-    runAI();
-  }
+    if (isAITurn() && state.result?.status === "ONGOING") {
+      // If the user started selecting cards for Black, wipe it
+      clearUiSelectionState();
+      render();
+  
+      try {
+        runAI();
+      } catch (e) {
+        console.error("AI error:", e);
+        pushLog(`AI error: ${String(e?.message || e)}`);
+      }
+    }
 }
 
 function runAI() {
