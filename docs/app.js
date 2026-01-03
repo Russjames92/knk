@@ -625,9 +625,12 @@ function inferBuilderMode() {
     return true;
   });
 
-  if (candidates.some((it) => it.action?.type === "NOBLE_ROOK_SWAP")) {
-    return { mode: "ROOK_SWAP", aId: null, bId: null };
-  }
+    // If placement is available for these locked cards, do NOT force noble-mode.
+    // Let the user click an empty square to PLACE, or click pieces to trigger noble flows.
+    const hasPlace = candidates.some((it) => it.action?.type === "PLACE");
+    if (!hasPlace && candidates.some((it) => it.action?.type === "NOBLE_ROOK_SWAP")) {
+      return { mode: "ROOK_SWAP", aId: null, bId: null };
+    }
 
   // NN exists => always use NN_AUTO (supports split OR double)
   if (candidates.some((it) => it.action?.type === "COMBO_NN")) {
