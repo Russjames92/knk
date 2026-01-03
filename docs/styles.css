@@ -79,3 +79,75 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
   background:#101521; font-size:12px; opacity:.95; margin:4px 6px 4px 0;
 }
 .hint{ font-size:13px; opacity:.9; min-height: 40px; }
+
+/* --- Action chooser modal --- */
+.modal.hidden { display: none; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+}
+
+.modalCard {
+  position: relative;
+  width: min(520px, calc(100vw - 32px));
+  border-radius: 16px;
+  background: rgba(18, 22, 28, 0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  padding: 18px;
+}
+
+.modalHeader h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.modalOptions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.modalBtn {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+}
+
+.modalBtn:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modalCancel {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+}
+
+.modalCancel:hover {
+  background: rgba(255,255,255,0.08);
+}
