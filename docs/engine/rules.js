@@ -450,7 +450,6 @@ export function getLegalIntents(state, side) {
     const kind = state.cardInstances[cid]?.kind;
     if (!kind) continue;
 
-    intents.push(...genPlaceIntents(state, side, cid, kind));
     intents.push(...genMoveIntents(state, side, cid, kind));
     intents.push(...genNobleIntents(state, side, cid, kind));
   }
@@ -484,34 +483,6 @@ export function getLegalIntents(state, side) {
 }
 
 // ---------- Intent generators ----------
-
-function genPlaceIntents(state, side, cid, kind) {
-  const map = { PAWN: "P", KNIGHT: "N", KING: "K", ROOK: "R", QUEEN: "Q", BISHOP: "B" };
-  const pType = map[kind];
-  if (!pType) return [];
-
-  const inactive = Object.values(state.pieces).filter((p) => p.side === side && p.type === pType && p.status === "INACTIVE");
-  if (inactive.length === 0) return [];
-
-  const backRank = side === "W" ? 1 : 8;
-  const secondRank = side === "W" ? 2 : 7;
-  const targetRank = pType === "P" ? secondRank : backRank;
-
-  const out = [];
-  for (const p of inactive) {
-    for (const f of FILES) {
-      const to = `${f}${targetRank}`;
-      if (state.board[to]) continue;
-      out.push({
-        kind: "TURN",
-        side,
-        play: { type: "SINGLE", cardIds: [cid] },
-        action: { type: "PLACE", payload: { pieceId: p.id, to } }
-      });
-    }
-  }
-  return out;
-}
 
 function genMoveIntents(state, side, cid, kind) {
   const out = [];
@@ -551,18 +522,18 @@ function genNobleIntents(state, side, cid, kind) {
   const out = [];
 
   if (kind === "QUEEN") {
-    for (const p of Object.values(state.pieces)) {
-      if (p.side !== side || p.status !== "ACTIVE") continue;
-      for (const m of generateMovesStandard(state, p.id)) {
-        out.push({
-          kind: "TURN",
-          side,
-          play: { type: "SINGLE", cardIds: [cid] },
-          action: { type: "NOBLE_QUEEN_MOVE_EXTRA_TURN", payload: { pieceId: p.id, from: m.from, to: m.to } }
-        });
-      }
+    const q = Object.values(state.pieces).find(p => p.side === side && p.type === "Q" && p.status === "ACTIVE");
+    if (!q) return out;
+    for (const m of generateMovesStandard(state, q.id)) {
+      out.push({
+        kind: "TURN",
+        side,
+        play: { type: "SINGLE", cardIds: [cid] },
+        action: { type: "NOBLE_QUEEN_MOVE_EXTRA_TURN", payload: { pieceId: q.id, from: m.from, to: m.to } }
+      });
     }
   }
+
 
   // (We’ll expand KING/ROOK/BISHOP nobles and combos after this is running cleanly.)
   return out;
