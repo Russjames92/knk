@@ -83,6 +83,27 @@ function cardKind(cardId) {
   return state?.cardMeta?.[cardId]?.kind || state?.cardInstances?.[cardId]?.kind || null;
 }
 
+function cardLabel(cid) {
+  return cardKind(cid) || cid;
+}
+
+function playLabel(intent) {
+  const ids = intent.play?.cardIds || [];
+  const kinds = ids.map(cardLabel);
+
+  if (!ids.length) return "-";
+
+  if (intent.play?.type === "SINGLE") {
+    return `${kinds[0]} (${ids[0]})`;
+  }
+
+  // COMBO
+  const sortedKinds = [...kinds].sort();
+  const sortedIds = [...ids].sort();
+  return `${sortedKinds.join("+")} (${sortedIds.join(",")})`;
+}
+
+
 function pieceAt(sq) {
   const id = state.board[sq];
   return id ? state.pieces[id] : null;
@@ -222,7 +243,8 @@ function humanAction(type) {
     NOBLE_ROOK_SWAP: "Rook Noble (swap two non-pawns)",
     NOBLE_QUEEN_MOVE_EXTRA_TURN: "Queen Noble (move + extra turn)",
     COMBO_NN: "Knight+Knight combo",
-    COMBO_NX_MORPH: "Knight+X morph combo"
+    COMBO_NX_MORPH: "Knight+X morph combo",
+    COMBO_KING_KNIGHT: "King+Knight combo (King moves like a Knight)"
   };
   return map[type] || type;
 }
