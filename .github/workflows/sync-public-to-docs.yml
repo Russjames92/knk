@@ -1,0 +1,48 @@
+name: Sync /public -> /docs (GitHub Pages)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "public/**"
+      - ".github/workflows/sync-public-to-docs.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync public to docs
+        run: |
+          set -e
+
+          # Ensure docs exists
+          mkdir -p docs
+
+          # Wipe docs (except .git) and copy fresh
+          rm -rf docs/*
+          cp -R public/* docs/
+
+          # Add .nojekyll to prevent Jekyll processing issues
+          touch docs/.nojekyll
+
+          # Commit only if changes exist
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Sync /public to /docs for GitHub Pages"
+          git push
