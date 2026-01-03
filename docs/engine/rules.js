@@ -564,18 +564,26 @@ function genComboNN(state, side, cardIds) {
     for (const m1 of firsts) {
       const to1 = m1.to;
 
-      let tmp;
-        try {
-          tmp = applyIntentStrict(state, {
-            kind: "TURN",
-            side,
-            play: { type: "COMBO", cardIds },
-            action: { type: "MOVE_STANDARD", payload: { pieceId: n.id, to: to1 } },
-          });
-        } catch {
-          // This first step is illegal (often because it leaves mover in check). Skip it.
-          continue;
-        }
+      // Simulate the FIRST knight step without enforcing "ended turn in check".
+      // We only need the intermediate position to generate the second step.
+      // Final legality is enforced later when the full COMBO intent is applied.
+      const tmp = clone(state);
+      const terminal1 = movePiece(tmp, side, n.id, to1);
+      
+      if (terminal1) {
+        // Captured the king on step 1 (game over). Keep your existing behavior.
+        out.push({
+          kind: "TURN",
+          side,
+          play: { type: "COMBO", cardIds },
+          action: {
+            type: "COMBO_NN",
+            payload: { mode: "DOUBLE", double: { pieceId: n.id, moves: [{ to: to1 }, { to: to1 }] } }
+          },
+        });
+        continue;
+      }
+
 
       if (tmp.phase.stage === "ENDED") {
         out.push({
