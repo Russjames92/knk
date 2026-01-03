@@ -119,33 +119,26 @@ function validateSetupIntent(state, intent) {
 
   const { action } = intent;
 
-  if (step === "PLACE_KING") {
-    assert(action.type === "SETUP_PLACE_KING", "Expected king placement");
-    const { to } = action.payload;
-    const backRank = intent.side === "W" ? 1 : 8;
-    assert(Number(to[1]) === backRank, "King must be on back rank");
-    assert(
-      to !== (intent.side === "W" ? "a1" : "a8") && to !== (intent.side === "W" ? "h1" : "h8"),
-      "King cannot be in a corner"
-    );
-    assert(!state.board[to], "Square occupied");
-    return;
-  }
+  // Setup is ONLY choosing the king square
+  assert(step === "PLACE_KING", "Setup already complete");
+  assert(action.type === "SETUP_PLACE_KING", "Expected king placement");
 
-  if (step === "PLACE_KNIGHTS") {
-    assert(action.type === "SETUP_PLACE_KNIGHTS", "Expected knight placement");
-    const { toA, toB } = action.payload;
-    assert(toA && toB, "Need toA/toB");
-    const backRank = intent.side === "W" ? 1 : 8;
-    assert(Number(toA[1]) === backRank && Number(toB[1]) === backRank, "Knights must be on back rank");
-    assert(toA !== toB, "Knights must be distinct squares");
-    assert(!state.board[toA] && !state.board[toB], "Square occupied");
-    return;
-  }
+  const { to } = action.payload;
+  const backRank = intent.side === "W" ? 1 : 8;
 
-  if (step === "DONE") {
-    throw new Error("Setup already done");
-  }
+  assert(Number(to[1]) === backRank, "King must be on back rank");
+  assert(
+    to !== (intent.side === "W" ? "a1" : "a8") && to !== (intent.side === "W" ? "h1" : "h8"),
+    "King cannot be in a corner"
+  );
+  assert(!state.board[to], "Square occupied");
+
+  // Knights must be adjacent squares and empty
+  const f = to[0];
+  const left = String.fromCharCode(f.charCodeAt(0) - 1) + backRank;
+  const right = String.fromCharCode(f.charCodeAt(0) + 1) + backRank;
+
+  assert(!state.board[left] && !state.board[right], "Adjacent knight squares must be empty");
 }
 
 function applyIntentMut(state, intent) {
