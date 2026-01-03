@@ -9,19 +9,40 @@
 <body>
   <header class="topbar">
     <div class="brand">Knights & Kings</div>
-    <div id="status" class="status">Not connected</div>
+    <div id="status" class="status">Offline</div>
 
     <div class="actions">
-      <button id="btnCreate">Create Game</button>
-      <input id="gameIdInput" placeholder="Game ID" />
-      <button id="btnJoin">Join Game</button>
-      <button id="btnVsAI">Vs AI</button>
+      <button id="btnNew">New Game</button>
+      <button id="btnReset">Reset</button>
+      <label class="toggle">
+        <input type="checkbox" id="aiToggle" />
+        <span>Vs AI (Black)</span>
+      </label>
     </div>
   </header>
 
   <main class="layout">
     <section class="panel">
-      <h2>Info</h2>
+      <h2>Game</h2>
+      <div id="phasePill" class="pill"></div>
+      <div id="turnPill" class="pill"></div>
+      <div id="checkPill" class="pill"></div>
+
+      <h3>Action</h3>
+      <div class="hint" id="hint"></div>
+
+      <div class="row">
+        <button id="btnPlaySingle" disabled>Play Single</button>
+        <button id="btnPlayCombo" disabled>Play Combo</button>
+        <button id="btnClear" disabled>Clear</button>
+      </div>
+
+      <div class="row">
+        <button id="btnConfirm" disabled>Confirm</button>
+        <button id="btnEndTurn" disabled>End Turn</button>
+      </div>
+
+      <h3>Debug</h3>
       <pre id="info"></pre>
     </section>
 
@@ -30,22 +51,14 @@
     </section>
 
     <section class="panel">
-      <h2>Your Hand</h2>
+      <h2>Hand</h2>
       <div id="hand" class="hand"></div>
-
-      <h3>Play</h3>
-      <div class="row">
-        <button id="btnPlaySingle" disabled>Play Single</button>
-        <button id="btnPlayCombo" disabled>Play Combo</button>
-        <button id="btnEndTurn" disabled>End Turn</button>
-      </div>
 
       <h3>Log</h3>
       <div id="log" class="log"></div>
     </section>
   </main>
 
-  <!-- Firebase (v10 modular) -->
   <script type="module" src="./app.js"></script>
 </body>
 </html>
