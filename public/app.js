@@ -776,11 +776,23 @@ function findPendingFromBuilder() {
       const p = a.payload || {};
       if (p.to !== to) continue;
 
-      if (p.pieceId) {
-        if (pieceId && p.pieceId === pieceId) return it;
-        continue;
-      }
-      return it;
+            if (p.pieceId) {
+             // Normal case: user selected a piece on the board
+             if (pieceId && p.pieceId === pieceId) return it;
+     
+             // Placement case: user clicked a square only (no pieceId selected).
+             // Allow matching intents that refer to an INACTIVE piece (i.e., supply placement).
+             if (!pieceId) {
+               const ref = state.pieces?.[p.pieceId];
+               if (ref && ref.status === "INACTIVE") return it;
+             }
+     
+             continue;
+           }
+     
+           // Intents that only need a destination square (no pieceId in payload)
+           return it;
+
     }
     return null;
   }
