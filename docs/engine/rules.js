@@ -192,32 +192,41 @@ function applySetupMut(state, intent) {
   const side = intent.side;
   const setup = state.phase.setup;
 
-  if (setup.step === "PLACE_KING") {
-    const kingId = findPieceInHand(state, side, "K");
-    placePiece(state, kingId, intent.action.payload.to);
-    setup.step = "PLACE_KNIGHTS";
-    return;
-  }
+  // Only step: PLACE_KING
+  const kingId = findPieceInHand(state, side, "K");
+  const to = intent.action.payload.to;
 
-  if (setup.step === "PLACE_KNIGHTS") {
-    const ks = Object.values(state.pieces).filter((p) => p.side === side && p.type === "N" && p.status === "IN_HAND");
-    assert(ks.length >= 2, "Not enough knights in hand");
-    placePiece(state, ks[0].id, intent.action.payload.toA);
-    placePiece(state, ks[1].id, intent.action.payload.toB);
+  placePiece(state, kingId, to);
 
-    if (setup.sideToPlace === "W") {
-      setup.sideToPlace = "B";
-      setup.step = "PLACE_KING";
-    } else {
-      setup.step = "DONE";
-      state.phase.stage = "TURN";
-      state.phase.turn = { side: "W", step: "DRAW", extraTurnQueue: 0 };
+  const backRank = side === "W" ? 1 : 8;
+  const f = to[0];
 
-      shuffleInPlace(state.decks.W);
-      shuffleInPlace(state.decks.B);
+  const leftSq = `${String.fromCharCode(f.charCodeAt(0) - 1)}${backRank}`;
+  const rightSq = `${String.fromCharCode(f.charCodeAt(0) + 1)}${backRank}`;
 
-      Object.assign(state, serverAdvanceDrawPhase(state));
-    }
+  const knights = Object.values(state.pieces).filter(
+    (p) => p.side === side && p.type === "N" && p.status === "IN_HAND"
+  );
+  assert(knights.length >= 2, "Not enough knights in hand");
+  assert(!state.board[leftSq] && !state.board[rightSq], "Knight squares occupied");
+
+  // Place both knights adjacent automatically
+  placePiece(state, knights[0].id, leftSq);
+  placePiece(state, knights[1].id, rightSq);
+
+  // Next side, or finish setup
+  if (setup.sideToPlace === "W") {
+    setup.sideToPlace = "B";
+    setup.step = "PLACE_KING";
+  } else {
+    setup.step = "DONE";
+    state.phase.stage = "TURN";
+    state.phase.turn = { side: "W", step: "DRAW", extraTurnQueue: 0 };
+
+    shuffleInPlace(state.decks.W);
+    shuffleInPlace(state.decks.B);
+
+    Object.assign(state, serverAdvanceDrawPhase(state));
   }
 }
 
