@@ -559,12 +559,18 @@ function genComboNN(state, side, cardIds) {
     for (const m1 of firsts) {
       const to1 = m1.to;
 
-      const tmp = applyIntentStrict(state, {
-        kind: "TURN",
-        side,
-        play: { type: "COMBO", cardIds },
-        action: { type: "MOVE_STANDARD", payload: { pieceId: n.id, to: to1 } },
-      });
+      let tmp;
+        try {
+          tmp = applyIntentStrict(state, {
+            kind: "TURN",
+            side,
+            play: { type: "COMBO", cardIds },
+            action: { type: "MOVE_STANDARD", payload: { pieceId: n.id, to: to1 } },
+          });
+        } catch {
+          // This first step is illegal (often because it leaves mover in check). Skip it.
+          continue;
+        }
 
       if (tmp.phase.stage === "ENDED") {
         out.push({
