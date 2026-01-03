@@ -529,6 +529,8 @@ function stepApply(intent) {
   pushLog(`${side} played ${cid} -> ${intent.action?.type || "?"}`);
 
   const res = evaluateGame(state);
+  state.result = res; // ✅ keep state.result current so AI can run
+  
   if (res?.status === "ENDED") {
     pushLog(`GAME OVER: ${res.winner} (${res.reason || "capture"})`);
   }
