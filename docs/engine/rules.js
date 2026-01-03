@@ -332,35 +332,30 @@ function resolvesCheckOrCapturesKing(state, intent) {
 function getSetupIntents(state, side) {
   const s = state.phase.setup;
   if (s.sideToPlace !== side) return [];
+  if (s.step !== "PLACE_KING") return [];
 
   const out = [];
+  const backRank = side === "W" ? 1 : 8;
 
-  if (s.step === "PLACE_KING") {
-    const backRank = side === "W" ? 1 : 8;
-    for (const f of FILES) {
-      const to = `${f}${backRank}`;
-      if (to === (side === "W" ? "a1" : "a8")) continue;
-      if (to === (side === "W" ? "h1" : "h8")) continue;
-      if (state.board[to]) continue;
-      out.push({ kind: "SETUP", side, action: { type: "SETUP_PLACE_KING", payload: { to } } });
-    }
-    return out;
-  }
+  for (const f of FILES) {
+    const to = `${f}${backRank}`;
 
-  if (s.step === "PLACE_KNIGHTS") {
-    const backRank = side === "W" ? 1 : 8;
-    const squares = FILES.map((f) => `${f}${backRank}`).filter((sq) => !state.board[sq]);
+    // not corners
+    if (to === (side === "W" ? "a1" : "a8")) continue;
+    if (to === (side === "W" ? "h1" : "h8")) continue;
 
-    for (let i = 0; i < squares.length; i++) {
-      for (let j = i + 1; j < squares.length; j++) {
-        out.push({
-          kind: "SETUP",
-          side,
-          action: { type: "SETUP_PLACE_KNIGHTS", payload: { toA: squares[i], toB: squares[j] } },
-        });
-      }
-    }
-    return out;
+    // ensure adjacent knight squares exist and are empty
+    const leftFile = String.fromCharCode(f.charCodeAt(0) - 1);
+    const rightFile = String.fromCharCode(f.charCodeAt(0) + 1);
+
+    if (!inBounds(leftFile, backRank) || !inBounds(rightFile, backRank)) continue;
+
+    const left = `${leftFile}${backRank}`;
+    const right = `${rightFile}${backRank}`;
+
+    if (state.board[to] || state.board[left] || state.board[right]) continue;
+
+    out.push({ kind: "SETUP", side, action: { type: "SETUP_PLACE_KING", payload: { to } } });
   }
 
   return out;
