@@ -32,26 +32,18 @@ const btnActionCancel = document.getElementById("btnActionCancel");
 let state = null;
 let logLines = [];
 
-let selectedCards = []; // array of cardIds
-let lockedPlay = null;  // { type:"SINGLE"|"COMBO", cardIds:[...], side:"W"|"B" }
-let lockedActionType = null; // string action.type we are trying to execute
+let selectedCards = [];
+let lockedPlay = null;       // { type:"SINGLE"|"COMBO", cardIds:[...], side }
+let lockedActionType = null; // action.type chosen in modal
+let pendingIntent = null;    // ready to confirm
 
-let pendingIntent = null; // intent ready to confirm
-
-// click-builder for multi-step actions
-let builder = null;
-/**
- * builder shapes:
- *  - { mode:"MOVE", fromSq, toSq }
- *  - { mode:"PLACE", toSq }
- *  - { mode:"NN_SPLIT", first:{pieceId,to}, second:null }
- */
+// builders
+let builder = null;          // TURN move builder
+let setupBuilder = null;     // SETUP knights builder: { firstSq }
 
 /* ---------------- Helpers ---------------- */
 
-function setHint(msg) {
-  elHint.textContent = msg || "—";
-}
+function setHint(msg) { elHint.textContent = msg || "—"; }
 
 function pushLog(line) {
   logLines.push(line);
@@ -77,24 +69,18 @@ function pieceAt(sq) {
   return id ? state.pieces[id] : null;
 }
 
-function currentSide() {
-  return state.phase.stage === "TURN" ? state.phase.turn.side : state.phase.setup.sideToPlace;
-}
-
 /* ---------------- Render ---------------- */
 
 function renderBoard() {
-  // Build 8x8 board once
   if (!elBoard.dataset.ready) {
     elBoard.innerHTML = "";
     const files = ["a","b","c","d","e","f","g","h"];
     for (let r = 8; r >= 1; r--) {
       for (let f = 0; f < 8; f++) {
         const sq = `${files[f]}${r}`;
-        const cell = document.createElement("button");
-        cell.className = "cell " + (((f + r) % 2 === 0) ? "light" : "dark");
+        const cell = document.createElement("div");
+        cell.className = "square " + (((f + r) % 2 === 0) ? "light" : "dark");
         cell.dataset.sq = sq;
-        cell.type = "button";
         cell.addEventListener("click", () => onSquareClick(sq));
         elBoard.appendChild(cell);
       }
@@ -102,47 +88,39 @@ function renderBoard() {
     elBoard.dataset.ready = "1";
   }
 
-  // Update pieces text
-  const cells = elBoard.querySelectorAll(".cell");
+  const cells = elBoard.querySelectorAll(".square");
   cells.forEach((cell) => {
     const sq = cell.dataset.sq;
     const pid = state.board[sq];
     cell.textContent = pid ? prettyPiece(pid) : "";
-    cell.classList.toggle("sel", builder?.fromSq === sq);
-    cell.classList.toggle("dest", builder?.toSq === sq || builder?.toSq === sq);
+    cell.classList.toggle("selected", builder?.fromSq === sq);
   });
 }
 
 function prettyPiece(pieceId) {
-  // piece id format used in engine: "W_N1" etc
   const p = state.pieces[pieceId];
   if (!p) return pieceId;
-  const t = p.type;
-  const side = p.side;
   const map = { K:"K", Q:"Q", R:"R", B:"B", N:"N", P:"P" };
-  return `${side}${map[t]}`;
+  return `${p.side}${map[p.type]}`;
 }
 
 function renderHand() {
   elHand.innerHTML = "";
-  const stage = state.phase.stage;
-  if (stage !== "TURN") return;
+  if (state.phase.stage !== "TURN") return;
 
   const side = state.phase.turn.side;
   const hand = state.hands?.[side] || [];
 
   hand.forEach((cid) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "cardChip";
+    const chip = document.createElement("div");
+    chip.className = "card";
     chip.textContent = cardKind(cid) || "CARD";
     chip.dataset.cid = cid;
 
-    const picked = selectedCards.includes(cid);
-    chip.classList.toggle("picked", picked);
+    chip.classList.toggle("selected", selectedCards.includes(cid));
 
     chip.addEventListener("click", () => {
-      if (lockedPlay) return; // once locked, must Clear to change
+      if (lockedPlay) return;
       toggleCard(cid);
     });
 
@@ -151,10 +129,8 @@ function renderHand() {
 }
 
 function toggleCard(cid) {
-  if (selectedCards.includes(cid)) {
-    selectedCards = selectedCards.filter((x) => x !== cid);
-  } else {
-    // allow up to 2 cards selected
+  if (selectedCards.includes(cid)) selectedCards = selectedCards.filter((x) => x !== cid);
+  else {
     if (selectedCards.length >= 2) return;
     selectedCards = [...selectedCards, cid];
   }
@@ -162,12 +138,13 @@ function toggleCard(cid) {
   builder = null;
   updateButtons();
   renderHand();
+  renderDebug();
 }
 
 function renderMeta() {
   pillStage.textContent = `Stage: ${state.phase.stage}`;
   if (state.phase.stage === "SETUP") {
-    pillTurn.textContent = `Turn: ${state.phase.setup.sideToPlace} / SETUP`;
+    pillTurn.textContent = `Turn: ${state.phase.setup.sideToPlace} / ${state.phase.setup.step}`;
   } else {
     pillTurn.textContent = `Turn: ${state.phase.turn.side} / ${state.phase.turn.step}`;
   }
@@ -179,7 +156,7 @@ function renderDebug() {
     result: state.result,
     phase: state.phase,
     hand: { W: state.hands?.W?.length ?? 0, B: state.hands?.B?.length ?? 0 },
-    selection: { selectedCards, lockedPlay, lockedActionType, builder, hasPending: !!pendingIntent }
+    selection: { selectedCards, lockedPlay, lockedActionType, builder, setupBuilder, hasPending: !!pendingIntent }
   }, null, 2);
 }
 
@@ -198,7 +175,7 @@ function openActionModal(actionTypes) {
   actionTypes.forEach((t) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "modalOption";
+    btn.className = "modalBtn";
     btn.textContent = humanAction(t);
     btn.addEventListener("click", () => {
       lockedActionType = t;
@@ -215,10 +192,7 @@ function openActionModal(actionTypes) {
   actionModal.classList.remove("hidden");
 }
 
-function closeActionModal() {
-  actionModal.classList.add("hidden");
-}
-
+function closeActionModal() { actionModal.classList.add("hidden"); }
 btnActionCancel.onclick = () => closeActionModal();
 
 function humanAction(type) {
@@ -258,17 +232,49 @@ function availableActionTypesForSelection() {
 /* ---------------- Click handling ---------------- */
 
 function onSquareClick(sq) {
-  // SETUP: immediate apply if legal
+  // SETUP flow (king is 1 click, knights are 2 clicks)
   if (state.phase.stage === "SETUP") {
     const side = state.phase.setup.sideToPlace;
     const intents = getLegalIntents(state, side);
-    const pick = intents.find((it) => it.action?.to === sq);
-    if (!pick) return;
-    stepApply(pick);
+
+    if (state.phase.setup.step === "PLACE_KING") {
+      const pick = intents.find((it) => it.action?.payload?.to === sq);
+      if (!pick) return;
+      stepApply(pick);
+      return;
+    }
+
+    if (state.phase.setup.step === "PLACE_KNIGHTS") {
+      if (!setupBuilder) {
+        setupBuilder = { firstSq: sq };
+        setHint("Now click the second knight square.");
+        render();
+        return;
+      }
+
+      const a = setupBuilder.firstSq;
+      const b = sq;
+      setupBuilder = null;
+
+      const pick = intents.find((it) => {
+        const p = it.action?.payload;
+        if (!p) return false;
+        return (p.toA === a && p.toB === b) || (p.toA === b && p.toB === a);
+      });
+
+      if (!pick) {
+        setHint("Not a legal knight pair. Try again.");
+        return;
+      }
+
+      stepApply(pick);
+      return;
+    }
+
     return;
   }
 
-  // TURN stage
+  // TURN stage gating
   if (state.phase.turn.step !== "PLAY") return;
 
   if (!lockedPlay || !lockedActionType) {
@@ -278,9 +284,9 @@ function onSquareClick(sq) {
 
   const intents = legalIntentsForSelection().filter((it) => it.action?.type === lockedActionType);
 
-  // PLACE: click destination only
+  // PLACE: destination-only
   if (lockedActionType === "PLACE") {
-    const pick = intents.find((it) => it.action?.to === sq);
+    const pick = intents.find((it) => it.action?.payload?.to === sq);
     if (!pick) {
       setHint("Not a legal placement square for these cards.");
       pendingIntent = null;
@@ -293,7 +299,7 @@ function onSquareClick(sq) {
     return;
   }
 
-  // COMBO_NN special builder logic (your hierarchy)
+  // COMBO_NN has its own click logic
   if (lockedActionType === "COMBO_NN") {
     handleComboNNClick(sq, intents);
     return;
@@ -311,8 +317,8 @@ function onSquareClick(sq) {
 
   if (builder.mode === "MOVE" && !builder.toSq) {
     builder.toSq = sq;
-
     const fromId = state.board[builder.fromSq];
+
     const pick = intents.find((it) => it.action?.payload?.pieceId === fromId && it.action?.payload?.to === sq);
 
     if (!pick) {
@@ -333,22 +339,22 @@ function onSquareClick(sq) {
 }
 
 function handleComboNNClick(sq, intents) {
-  // Step 1: choose a knight
+  // Choose a knight first
   if (!builder) {
     const p = pieceAt(sq);
     if (!p || p.side !== state.phase.turn.side || p.type !== "N") return;
-    builder = { mode: "NN", fromSq: sq, toSq: null, first: null };
+    builder = { mode: "NN_PICK", fromSq: sq, toSq: null, first: null };
     setHint("Select destination (this will decide split vs double).");
     render();
     return;
   }
 
-  // Step 2: choose destination for first click
-  if (builder.mode === "NN" && !builder.toSq) {
+  // Choose destination for the first click
+  if (builder.mode === "NN_PICK" && !builder.toSq) {
     builder.toSq = sq;
     const pieceId = state.board[builder.fromSq];
 
-    // Determine if destination is a 1-move knight destination (=> SPLIT intent path)
+    // SPLIT detection: any SPLIT intent where this knight goes to sq
     const oneMoveDests = intents
       .filter((it) => it.action?.payload?.mode === "SPLIT")
       .flatMap((it) => [it.action.payload.split.a, it.action.payload.split.b])
@@ -358,7 +364,6 @@ function handleComboNNClick(sq, intents) {
     const isOneMove = oneMoveDests.includes(sq);
 
     if (isOneMove) {
-      // SPLIT path: record first, now require second knight selection
       builder.mode = "NN_SPLIT";
       builder.first = { pieceId, to: sq };
       builder.fromSq = null;
@@ -370,8 +375,10 @@ function handleComboNNClick(sq, intents) {
       return;
     }
 
-    // Otherwise interpret as DOUBLE: find any DOUBLE intent with final-to == sq
-    const doubles = intents.filter((it) => it.action?.payload?.mode === "DOUBLE" && it.action?.payload?.double?.pieceId === pieceId);
+    // DOUBLE: find any DOUBLE intent where second move ends on sq
+    const doubles = intents.filter(
+      (it) => it.action?.payload?.mode === "DOUBLE" && it.action?.payload?.double?.pieceId === pieceId
+    );
     const pick = doubles.find((it) => it.action.payload.double.moves?.[1]?.to === sq);
 
     if (!pick) {
@@ -390,7 +397,7 @@ function handleComboNNClick(sq, intents) {
     return;
   }
 
-  // SPLIT path: need second knight then dest
+  // SPLIT path: need second knight then destination
   if (builder.mode === "NN_SPLIT" && !builder.fromSq) {
     const p = pieceAt(sq);
     if (!p || p.side !== state.phase.turn.side || p.type !== "N") return;
@@ -404,7 +411,6 @@ function handleComboNNClick(sq, intents) {
     builder.toSq = sq;
     const secondId = state.board[builder.fromSq];
 
-    // Find SPLIT intent matching both moves (order-insensitive)
     const pick = intents.find((it) => {
       const pl = it.action?.payload;
       if (!pl || pl.mode !== "SPLIT") return false;
@@ -413,8 +419,14 @@ function handleComboNNClick(sq, intents) {
       const m1 = builder.first;
       const m2 = { pieceId: secondId, to: sq };
 
-      const sameOrder = (a.pieceId === m1.pieceId && a.to === m1.to && b.pieceId === m2.pieceId && b.to === m2.to);
-      const swapped   = (b.pieceId === m1.pieceId && b.to === m1.to && a.pieceId === m2.pieceId && a.to === m2.to);
+      const sameOrder =
+        a.pieceId === m1.pieceId && a.to === m1.to &&
+        b.pieceId === m2.pieceId && b.to === m2.to;
+
+      const swapped =
+        b.pieceId === m1.pieceId && b.to === m1.to &&
+        a.pieceId === m2.pieceId && a.to === m2.to;
+
       return sameOrder || swapped;
     });
 
@@ -431,7 +443,6 @@ function handleComboNNClick(sq, intents) {
     setHint("Split selected. Click Confirm.");
     updateButtons();
     render();
-    return;
   }
 }
 
@@ -444,7 +455,7 @@ function updateButtons() {
   btnPlaySingle.disabled = !(stage === "TURN" && turnStep === "PLAY" && !lockedPlay && selectedCards.length === 1);
   btnPlayCombo.disabled  = !(stage === "TURN" && turnStep === "PLAY" && !lockedPlay && selectedCards.length === 2);
 
-  btnClear.disabled = !(selectedCards.length || lockedPlay || lockedActionType || builder || pendingIntent);
+  btnClear.disabled = !(selectedCards.length || lockedPlay || lockedActionType || builder || setupBuilder || pendingIntent);
 
   btnConfirm.disabled = !pendingIntent;
   btnEndTurn.disabled = !(stage === "TURN" && turnStep === "PLAY");
@@ -479,6 +490,7 @@ btnClear.onclick = () => {
   lockedPlay = null;
   lockedActionType = null;
   builder = null;
+  setupBuilder = null;
   pendingIntent = null;
   setHint("—");
   closeActionModal();
@@ -489,7 +501,6 @@ btnConfirm.onclick = () => {
   if (!pendingIntent) return;
   stepApply(pendingIntent);
 
-  // after applying, clear selection for next action
   selectedCards = [];
   lockedPlay = null;
   lockedActionType = null;
@@ -500,10 +511,7 @@ btnConfirm.onclick = () => {
 };
 
 btnEndTurn.onclick = () => {
-  // In your engine, "end turn" is typically: discard played cards already handled by applyIntent
-  // and then step proceeds after player actions are done. If you need a strict END_TURN action,
-  // add it in rules.js. For now this is UI only.
-  setHint("End Turn: if your engine requires explicit end-turn, we’ll wire it next.");
+  setHint("End Turn is automatic after you Confirm an action.");
 };
 
 btnNewGame.onclick = () => startNewGame();
@@ -516,7 +524,7 @@ function stepApply(intent) {
   const after = applyIntent(before, intent);
   state = after;
 
-  const side = intent.side || intent.play?.side || before.phase.turn.side;
+  const side = intent.side || before.phase.turn?.side || "?";
   const cid = intent.play?.cardIds?.join(",") || "-";
   pushLog(`${side} played ${cid} -> ${intent.action?.type || "?"}`);
 
@@ -532,19 +540,19 @@ function stepApply(intent) {
 function tick() {
   if (!state) return;
 
-  // Auto-advance draw step (this is what prevents “Drawing…” freeze)
   if (state.phase.stage === "TURN" && state.phase.turn.step === "DRAW") {
     state = serverAdvanceDrawPhase(state);
     render();
     return;
   }
 
-  // AI turn
-  if (chkAI.checked &&
-      state.phase.stage === "TURN" &&
-      state.phase.turn.step === "PLAY" &&
-      state.phase.turn.side === "B" &&
-      state.result?.status === "ONGOING") {
+  if (
+    chkAI.checked &&
+    state.phase.stage === "TURN" &&
+    state.phase.turn.step === "PLAY" &&
+    state.phase.turn.side === "B" &&
+    state.result?.status === "ONGOING"
+  ) {
     runAI();
   }
 }
@@ -554,7 +562,6 @@ function runAI() {
   const intents = getLegalIntents(state, side);
   if (!intents.length) return;
 
-  // 1) If any move wins immediately, do it.
   for (const it of intents) {
     const next = applyIntent(state, it);
     if (next?.result?.status === "ENDED" && next.result.winner === side) {
@@ -563,35 +570,23 @@ function runAI() {
     }
   }
 
-  // 2) Prefer captures (quick heuristic by diffing pieces)
   function captureScore(it) {
     const before = state;
     const after = applyIntent(state, it);
-
     const beforePieces = Object.values(before.pieces).filter(p => p.status === "ACTIVE").length;
     const afterPieces  = Object.values(after.pieces).filter(p => p.status === "ACTIVE").length;
     const captured = beforePieces - afterPieces;
-
-    // also slightly prefer checking the opponent
     const checkBonus = after.threat?.inCheck?.W ? 0.25 : 0;
-
     return captured + checkBonus;
   }
 
-  let best = null;
-  let bestScore = -999;
-
+  let best = null, bestScore = -999;
   for (const it of intents) {
     const sc = captureScore(it);
-    if (sc > bestScore) {
-      bestScore = sc;
-      best = it;
-    }
+    if (sc > bestScore) { bestScore = sc; best = it; }
   }
 
-  // fallback random
   if (!best) best = intents[Math.floor(Math.random() * intents.length)];
-
   stepApply(best);
 }
 
@@ -604,9 +599,10 @@ function startNewGame() {
   lockedPlay = null;
   lockedActionType = null;
   builder = null;
+  setupBuilder = null;
   pendingIntent = null;
 
-  setHint("Starting game…");
+  setHint("Starting game… (click squares to place King, then pick 2 squares for Knights)");
   closeActionModal();
   render();
 
