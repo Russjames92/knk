@@ -596,6 +596,7 @@ let loopHandle = null;
 
 function startNewGame() {
   state = newGameState({ vsAI: chkAI.checked, aiSide: "B" });
+  state.result = evaluateGame(state);
   logLines = [];
   selectedCards = [];
   lockedPlay = null;
