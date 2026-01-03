@@ -57,8 +57,6 @@ btnConfirm.onclick = () => {
 };
 
 btnEndTurn.onclick = () => {
-  // In this engine, a Confirm applies a full intent and advances turn automatically.
-  // End Turn is only here if you later add multi-step UI; for now, it just clears.
   selectedCards = [];
   selectedSquare = null;
   pendingIntent = null;
@@ -71,12 +69,11 @@ function startNewGame(){
   selectedCards = [];
   selectedSquare = null;
   pendingIntent = null;
-  tick(); // advance draw if needed
+  tick();
   render();
 }
 
 function tick(){
-  // server-like draw phase advance
   state = serverAdvanceDrawPhase(state);
 
   // If AI turn, play automatically until it's human's turn or game ends.
@@ -150,20 +147,18 @@ function renderHintAndButtons(){
     elHint.textContent =
       step === "PLACE_KING"
         ? `${side}: Place your King on the back rank (not a corner). Click a square.`
-        : `${side}: Place your Knights adjacent to your King (left/right). Click your King to highlight.`;
-
+        : `${side}: Place your Knights adjacent to your King (left/right). Click a square.`;
     return;
   }
 
-  // TURN PLAY
   if(state.phase.turn.step !== "PLAY"){
     elHint.textContent = "Drawing...";
     return;
   }
 
   elHint.textContent = pendingIntent
-    ? "Ready. Click Confirm to commit the move."
-    : "Select 1 card (single) or 2 cards (combo), then click a highlighted square/piece move.";
+    ? "Ready. Click Confirm to commit the action."
+    : "Select 1 card (single) or 2 cards (combo), then click a highlighted square.";
 
   if(selectedCards.length === 1) btnPlaySingle.disabled = false;
   if(selectedCards.length === 2) btnPlayCombo.disabled = false;
@@ -181,7 +176,6 @@ function renderHand(){
     div.textContent = c.kind;
 
     div.onclick = () => {
-      // limit to 2 selections
       if(selectedCards.includes(cid)){
         selectedCards = selectedCards.filter(x => x !== cid);
       } else {
@@ -198,8 +192,6 @@ function renderHand(){
 }
 
 function currentControllingSide(){
-  // Hotseat: whoever's turn it is controls.
-  // AI mode: only White is human
   if(isAIEnabled()) return "W";
   if(state.phase.stage === "SETUP") return state.phase.setup.sideToPlace;
   return state.phase.turn.side;
@@ -213,14 +205,25 @@ function renderBoard(){
   const enemyKingSquares = new Set();
 
   for(const it of legal){
-    // Determine "to" squares for highlighting for various action shapes
     const a = it.action;
+
+    // setup highlights
     if(a.type === "SETUP_PLACE_KING") legalSquares.add(a.payload.to);
     if(a.type === "SETUP_PLACE_KNIGHTS"){
       legalSquares.add(a.payload.left);
       legalSquares.add(a.payload.right);
     }
+
+    // standard single-target moves / places
     if(a.payload?.to) legalSquares.add(a.payload.to);
+
+    // bishop block check has 2 targets
+    if(a.type === "NOBLE_BISHOP_BLOCK_CHECK"){
+      legalSquares.add(a.payload.kingTo);
+      legalSquares.add(a.payload.followup.to);
+    }
+
+    // NN combo highlights
     if(a.type === "COMBO_NN"){
       if(a.payload.mode === "DOUBLE"){
         for(const mv of a.payload.double.moves) legalSquares.add(mv.to);
@@ -229,8 +232,9 @@ function renderBoard(){
         legalSquares.add(a.payload.split.b.to);
       }
     }
+
+    // rook swap highlight by the two piece squares
     if(a.type === "NOBLE_ROOK_SWAP"){
-      // swaps highlight pieces, not squares (we'll handle by square add)
       const sqA = state.pieces[a.payload.pieceA].square;
       const sqB = state.pieces[a.payload.pieceB].square;
       if(sqA) legalSquares.add(sqA);
@@ -280,7 +284,6 @@ function onSquareClick(square){
 
   selectedSquare = square;
 
-  // Setup mode clicks build direct intents
   if(state.phase.stage === "SETUP"){
     const side = state.phase.setup.sideToPlace;
     const step = state.phase.setup.step;
@@ -296,21 +299,15 @@ function onSquareClick(square){
     }
 
     if(step === "PLACE_KNIGHTS"){
-      // user can click the king square to find adjacency; we just build if square is a valid left/right
       const legal = computeLegalForUI();
       const match = legal.find(it => it.action.type==="SETUP_PLACE_KNIGHTS"
         && (it.action.payload.left===square || it.action.payload.right===square));
-      if(match){
-        pendingIntent = match;
-      } else {
-        pendingIntent = null;
-      }
+      pendingIntent = match || null;
       render();
       return;
     }
   }
 
-  // TURN mode: choose an intent matching selected cards and square
   if(state.phase.stage === "TURN" && state.phase.turn.step === "PLAY"){
     buildPending();
     render();
@@ -328,19 +325,22 @@ function buildPending(){
   if(selectedCards.length !== 1 && selectedCards.length !== 2) return;
 
   const legal = computeLegalForUI();
-
-  // Filter to intents whose cardIds match selection AND whose action targets selectedSquare
   const want = new Set(selectedCards);
+
   const matches = legal.filter(it => {
     const ids = it.play.cardIds;
     if(ids.length !== want.size) return false;
     for(const id of ids) if(!want.has(id)) return false;
 
-    // If no square selected, don't auto-pick
     if(!selectedSquare) return false;
 
     const a = it.action;
+
     if(a.payload?.to === selectedSquare) return true;
+
+    if(a.type === "NOBLE_BISHOP_BLOCK_CHECK"){
+      return selectedSquare === a.payload.kingTo || selectedSquare === a.payload.followup.to;
+    }
 
     if(a.type === "NOBLE_ROOK_SWAP"){
       const sqA = state.pieces[a.payload.pieceA].square;
@@ -358,16 +358,12 @@ function buildPending(){
     return false;
   });
 
-  if(matches.length === 1){
-    pendingIntent = matches[0];
-  } else if(matches.length > 1){
-    // choose the first (later we’ll add a disambiguation UI)
-    pendingIntent = matches[0];
+  if(matches.length >= 1){
+    pendingIntent = matches[0]; // later we’ll add disambiguation UI
   }
 }
 
 function computeLegalForUI(){
-  // Setup legal generation
   if(state.phase.stage === "SETUP"){
     const side = state.phase.setup.sideToPlace;
     const step = state.phase.setup.step;
@@ -401,12 +397,8 @@ function computeLegalForUI(){
     return [];
   }
 
-  // TURN legal generation from rules engine
   const side = state.phase.turn.side;
-  // In AI mode, human only plays White; we still highlight only if it's White's turn.
   if(isAIEnabled() && side !== "W") return [];
-
-  // Our engine exposes legal intents for current side
   return getLegalIntents(state, side);
 }
 
