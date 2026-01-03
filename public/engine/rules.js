@@ -291,6 +291,11 @@ function applyAction(state, intent) {
       return movePiece(state, intent.side, move.pieceId, move.to);
     }
 
+    case "COMBO_KING_KNIGHT": {
+      const { pieceId, to } = a.payload;
+      return movePiece(state, intent.side, pieceId, to);
+    }
+
     default:
       throw new Error("Unknown action type: " + a.type);
   }
@@ -409,6 +414,11 @@ function genCombo(state, side, a, b) {
   const cardIds = [a, b];
 
   if (ka === "KNIGHT" && kb === "KNIGHT") return genComboNN(state, side, cardIds);
+
+  // KING + KNIGHT: King moves like a knight
+  if ((ka === "KING" && kb === "KNIGHT") || (kb === "KING" && ka === "KNIGHT")) {
+    return genComboKingKnight(state, side, cardIds);
+  }
 
   if (ka === "KNIGHT" && kb !== "KNIGHT") return genComboNX(state, side, cardIds, kb);
   if (kb === "KNIGHT" && ka !== "KNIGHT") return genComboNX(state, side, cardIds, ka);
@@ -646,6 +656,53 @@ function genComboNX(state, side, cardIds, otherKind) {
         play: { type: "COMBO", cardIds },
         action: { type: "COMBO_NX_MORPH", payload: { otherKind, move: { pieceId: n.id, to } } },
       });
+    }
+  }
+
+  return out;
+}
+
+
+function genComboKingKnight(state, side, cardIds) {
+  const out = [];
+  const king = Object.values(state.pieces).find(
+    (p) => p.side === side && p.type === "K" && p.status === "ACTIVE" && p.square
+  );
+  if (!king) return out;
+
+  const from = king.square;
+
+  const deltas = [
+    [ 2, 1], [ 2,-1], [-2, 1], [-2,-1],
+    [ 1, 2], [ 1,-2], [-1, 2], [-1,-2],
+  ];
+
+  for (const [df, dr] of deltas) {
+    const nf = String.fromCharCode(fileOf(from).charCodeAt(0) + df);
+    const nr = rankOf(from) + dr;
+    if (!inBounds(nf, nr)) continue;
+
+    const to = sq(nf, nr);
+    const occId = state.board[to];
+
+    // Can move to empty square or capture an enemy piece
+    if (!occId) {
+      out.push({
+        kind: "TURN",
+        side,
+        play: { type: "COMBO", cardIds },
+        action: { type: "COMBO_KING_KNIGHT", payload: { pieceId: king.id, to } },
+      });
+    } else {
+      const occ = state.pieces[occId];
+      if (occ.side !== side) {
+        out.push({
+          kind: "TURN",
+          side,
+          play: { type: "COMBO", cardIds },
+          action: { type: "COMBO_KING_KNIGHT", payload: { pieceId: king.id, to } },
+        });
+      }
     }
   }
 
