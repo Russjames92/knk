@@ -584,33 +584,71 @@ function tick() {
 function runAI() {
   const side = "B";
   const intents = getLegalIntents(state, side);
-  if (!intents.length) return;
 
+  if (!intents.length) {
+    // No legal moves; you can decide if that's stalemate/loss later.
+    pushLog("AI has no legal moves.");
+    return;
+  }
+
+  // 1) Try to find an immediate win (king capture)
   for (const it of intents) {
-    const next = applyIntent(state, it);
-    if (next?.result?.status === "ENDED" && next.result.winner === side) {
-      stepApply(it);
-      return;
+    try {
+      const next = applyIntent(state, it);
+      if (next?.phase?.stage === "ENDED" || next?.result?.status === "ENDED") {
+        stepApply(it);
+        return;
+      }
+    } catch {
+      // skip illegal simulation
     }
   }
 
+  // 2) Otherwise score candidates; never let one bad intent abort the AI turn
   function captureScore(it) {
-    const before = state;
-    const after = applyIntent(state, it);
-    const beforePieces = Object.values(before.pieces).filter(p => p.status === "ACTIVE").length;
-    const afterPieces  = Object.values(after.pieces).filter(p => p.status === "ACTIVE").length;
-    const captured = beforePieces - afterPieces;
-    const checkBonus = after.threat?.inCheck?.W ? 0.25 : 0;
-    return captured + checkBonus;
+    try {
+      const before = state;
+      const after = applyIntent(state, it);
+
+      const beforePieces = Object.values(before.pieces).filter(p => p.status === "ACTIVE").length;
+      const afterPieces  = Object.values(after.pieces).filter(p => p.status === "ACTIVE").length;
+      const captured = beforePieces - afterPieces;
+
+      const checkBonus = after.threat?.inCheck?.W ? 0.25 : 0;
+
+      return captured + checkBonus;
+    } catch {
+      return -9999; // treat as unusable
+    }
   }
 
-  let best = null, bestScore = -999;
+  let best = null;
+  let bestScore = -9999;
+
   for (const it of intents) {
     const sc = captureScore(it);
-    if (sc > bestScore) { bestScore = sc; best = it; }
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = it;
+    }
   }
 
-  if (!best) best = intents[Math.floor(Math.random() * intents.length)];
+  // Fallback: pick the first intent that applies cleanly
+  if (!best || bestScore <= -9000) {
+    for (const it of intents) {
+      try {
+        applyIntent(state, it);
+        best = it;
+        break;
+      } catch {}
+    }
+  }
+
+  if (!best) {
+    pushLog("AI failed to choose a move.");
+    return;
+  }
+
   stepApply(best);
 }
 
