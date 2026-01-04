@@ -173,7 +173,7 @@ function applyIntentMut(state, intent) {
     const turn = state.phase.turn;
 
     if (intent.action.type === "NOBLE_QUEEN_MOVE_EXTRA_TURN" ||
-    a.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN" || intent.action.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN") {
+        intent.action.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN") {
       turn.extraTurnQueue += 1;
     }
 
@@ -874,7 +874,6 @@ function genComboNXBothWays(state, side, cardIds, otherKind) {
 }
 
 function genAsOtherDests(state, from, side, otherKind) {
-(state, from, side, otherKind) {
   if (otherKind === "ROOK") return genRayDests(state, from, side, [[1,0],[-1,0],[0,1],[0,-1]]);
   if (otherKind === "BISHOP") return genRayDests(state, from, side, [[1,1],[1,-1],[-1,1],[-1,-1]]);
   if (otherKind === "QUEEN") return genRayDests(state, from, side, [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]);
