@@ -1,5 +1,5 @@
 :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-body { margin:0; background:#0f1115; color:#e8e8e8; }
+body { margin:0; background:#141c2d; color:#e8e8e8; }
 .topbar {
   display:flex; gap:16px; align-items:center; justify-content:space-between;
   padding:12px 16px; border-bottom:1px solid #222;
@@ -33,11 +33,12 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 .boardWrap { display:flex; justify-content:center; align-items:flex-start; }
 
 .board {
+  --sq: clamp(52px, 7.2vw, 92px);
   display:grid;
-  grid-template-columns: repeat(8, 64px);
-  grid-template-rows: repeat(8, 64px);
-  border:2px solid #222;
-  border-radius:10px;
+  grid-template-columns: repeat(8, var(--sq));
+  grid-template-rows: repeat(8, var(--sq));
+  border: 0;
+  border-radius: 0;
   overflow:hidden;
 }
 
@@ -46,8 +47,8 @@ button:disabled { opacity:.4; cursor:not-allowed; }
   user-select:none;
   position:relative;
 }
-.square.light { background:#2a2f3a; }
-.square.dark  { background:#1b1f28; }
+.square.light { background:#f5f6f8; }
+.square.dark  { background:#1f2b44; }
 
 .square.selectable { outline:2px solid rgba(255,255,255,.25); cursor:pointer; }
 .square.selected { outline:3px solid rgba(255,255,255,.9); }
@@ -155,13 +156,60 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 
 .hintSmall{ font-size:12px; opacity:.75; min-height:18px; margin-top:6px; }
 
-.pieceImg {
-  width: 86%;
-  height: 86%;
-  display: block;
-  margin: 0 auto;
-  object-fit: contain;
-  object-position: center;
-  pointer-events: none;
-  user-select: none;
+
+/* ===== Board Frame / Coordinates (EC-style) ===== */
+.boardFrame{
+  display:grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 10px 14px;
+  align-items:stretch;
+  justify-items:center;
 }
+
+.boardOuter{
+  border: 10px solid #e9ea5a;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45);
+  background:#e9ea5a;
+  padding: 10px;
+}
+
+.rankLabels{
+  display:grid;
+  grid-template-rows: repeat(8, var(--sq));
+  align-items:center;
+  justify-items:center;
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  color:#f4f6ff;
+  letter-spacing: .02em;
+  font-size: 22px;
+  text-shadow: 0 2px 10px rgba(0,0,0,.45);
+}
+
+.fileLabels{
+  grid-column: 2 / 3;
+  display:grid;
+  grid-template-columns: repeat(8, var(--sq));
+  align-items:center;
+  justify-items:center;
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  color:#f4f6ff;
+  letter-spacing: .12em;
+  font-size: 22px;
+  text-shadow: 0 2px 10px rgba(0,0,0,.45);
+  margin-top: 4px;
+}
+
+.square{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Make selection/legals read well on bright board */
+.square.selectable { outline:2px solid rgba(0,0,0,.15); cursor:pointer; }
+.square.selected { outline:3px solid rgba(233,234,90,.95); outline-offset:-3px; }
+.square.legal { box-shadow: inset 0 0 0 3px rgba(60,220,120,.65); cursor:pointer; }
+.square.enemyKing { box-shadow: inset 0 0 0 3px rgba(255,70,70,.78); }
