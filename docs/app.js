@@ -178,97 +178,57 @@ function pieceAt(sq) {
   const id = state.board[sq];
   return id ? state.pieces[id] : null;
 }
+function renderHand() {
+  const el = document.getElementById('hand');
+  if (!el) return;
 
-/* ---------------- Render ---------------- */
+  el.innerHTML = '';
+  el.classList.add('handGrid');
 
-function renderBoard() {
-  if (!elBoard.dataset.ready) {
-    elBoard.innerHTML = "";
-    const files = ["a","b","c","d","e","f","g","h"];
-    for (let r = 8; r >= 1; r--) {
-      for (let f = 0; f < 8; f++) {
-        const sq = `${files[f]}${r}`;
-        const cell = document.createElement("div");
-        cell.className = "square " + (((f + r) % 2 === 0) ? "light" : "dark");
-        cell.dataset.sq = sq;
-        cell.addEventListener("click", () => onSquareClick(sq));
-        elBoard.appendChild(cell);
-      }
-    }
-    elBoard.dataset.ready = "1";
+  // During SETUP show the side that is placing; otherwise show the active turn side.
+  const side = (state?.phase?.stage === 'SETUP')
+    ? (state.phase.setup?.sideToPlace || 'W')
+    : (state.phase.turn?.side || 'W');
+
+  const hand = (state?.hand && state.hand[side]) ? state.hand[side] : [];
+
+  if (!hand.length) {
+    const empty = document.createElement('div');
+    empty.className = 'handEmpty';
+    empty.textContent = (state?.phase?.stage === 'SETUP')
+      ? 'Cards appear after setup.'
+      : '(No cards)';
+    el.appendChild(empty);
+    return;
   }
 
-  const cells = elBoard.querySelectorAll(".square");
-  cells.forEach((cell) => {
-    const sq = cell.dataset.sq;
-    const pid = state.board[sq];
-    
-cell.innerHTML = "";
-if (pid) {
-  const piece = state.pieces[pid];
-  const img = document.createElement("img");
-  img.src = pieceImageSrc(piece);
-  img.className = "pieceImg";
-  img.draggable = false;
-  cell.appendChild(img);
-}
+  for (const cid of hand) {
+    const kind = cardKind(cid) || 'UNKNOWN';
 
-    cell.classList.toggle("selected", builder?.fromSq === sq);
-  });
-}
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'handCard';
+    card.dataset.cid = cid;
 
-function prettyPiece(pieceId) {
-  const p = state.pieces[pieceId];
-  if (!p) return pieceId;
-  const map = { K:"K", Q:"Q", R:"R", B:"B", N:"N", P:"P" };
-  return `${p.side}${map[p.type]}`;
-}
-
-function cardImageSrc(kind, side) {
-  const typeMap = { KING:"king", QUEEN:"queen", ROOK:"rook", BISHOP:"bishop", KNIGHT:"knight", PAWN:"pawn" };
-  const color = side === "W" ? "white" : "black";
-  return `imgs/${typeMap[kind]}-${color}.png`;
-}
-
-function renderHand() {
-  const el = document.getElementById("hand");
-  if (!el) return;
-  el.innerHTML = "";
-  el.classList.add("handGrid");
-
-  const side = (state?.phase?.stage === "SETUP") ? (state.phase.setup?.sideToPlace || "W") : (state.phase.turn?.side || "W");
-  const hand = state.hands?.[side] || []; 
-
-  hand.forEach((cid) => {
-    const card = CARD_DB[cid];
-    const kind = card?.kind || "UNKNOWN";
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "handCard";
-    btn.dataset.cid = cid;
-
-    if (selectedCards.includes(cid)) btn.classList.add("selected");
-
-    const img = document.createElement("img");
-    img.className = "handCardImg";
+    const img = document.createElement('img');
+    img.className = 'handCardImg';
     img.alt = kind;
     img.src = cardImageSrc(kind, side);
 
-    const label = document.createElement("div");
-    label.className = "handCardLabel";
+    const label = document.createElement('div');
+    label.className = 'handCardLabel';
     label.textContent = kind;
 
-    btn.appendChild(img);
-    btn.appendChild(label);
+    card.appendChild(img);
+    card.appendChild(label);
 
-    btn.addEventListener("click", () => {
-      toggleCard(cid);
-      render(); // re-render to reflect selection styling + action availability
-    });
+    if (state?.selection?.selectedCards?.includes(cid)) {
+      card.classList.add('selected');
+    }
 
-    el.appendChild(btn);
-  });
+    card.addEventListener('click', () => toggleCard(cid));
+    el.appendChild(card);
+  }
 }
 
 
