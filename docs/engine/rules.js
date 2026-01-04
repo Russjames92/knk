@@ -489,7 +489,6 @@ function genCombo(state, side, a, b) {
 }
 
 /* ------------------ PLACE generation ------------------ */
- ------------------ */
 
 function genPlace(state, side, cardId) {
   const kind = cardKind(state, cardId);
