@@ -159,6 +159,9 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 
 /* ===== Board Frame / Coordinates (EC-style) ===== */
 .boardFrame{
+  /* One shared square size for board + coordinates */
+  --sq: clamp(64px, 6.4vw, 110px);
+
   display:grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: 1fr auto;
@@ -168,10 +171,30 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 }
 
 .boardOuter{
-  border: 10px solid #e9ea5a;
+  border: 12px solid #e9ea5a;
   box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45);
-  background:#e9ea5a;
-  padding: 10px;
+  background: transparent; /* prevents yellow gridlines between squares */
+  padding: 0;             /* prevents yellow gutters */
+}
+
+.board{
+  display:grid;
+  grid-template-columns: repeat(8, var(--sq));
+  grid-template-rows: repeat(8, var(--sq));
+  border: 0;
+  border-radius: 0;
+  overflow:hidden;
+}
+
+/* Override earlier fixed square sizing */
+.square{
+  width: var(--sq);
+  height: var(--sq);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  user-select:none;
+  position:relative;
 }
 
 .rankLabels{
@@ -183,8 +206,9 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
   font-weight: 600;
   color:#f4f6ff;
   letter-spacing: .02em;
-  font-size: 22px;
+  font-size: clamp(16px, 2.2vw, 26px);
   text-shadow: 0 2px 10px rgba(0,0,0,.45);
+  padding-left: 6px;
 }
 
 .fileLabels{
@@ -197,18 +221,12 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
   font-weight: 600;
   color:#f4f6ff;
   letter-spacing: .12em;
-  font-size: 22px;
+  font-size: clamp(16px, 2.2vw, 26px);
   text-shadow: 0 2px 10px rgba(0,0,0,.45);
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
-.square{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-
-/* Make selection/legals read well on bright board */
+/* Make selection/legals read well on this board */
 .square.selectable { outline:2px solid rgba(0,0,0,.15); cursor:pointer; }
 .square.selected { outline:3px solid rgba(233,234,90,.95); outline-offset:-3px; }
 .square.legal { box-shadow: inset 0 0 0 3px rgba(60,220,120,.65); cursor:pointer; }
