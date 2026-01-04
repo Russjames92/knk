@@ -84,8 +84,8 @@ button:disabled{ opacity:.4; cursor:not-allowed; }
      - width budget: viewport minus side panels and gutters
      - height budget: viewport minus header and a little UI padding for labels */
   --sq: min(
-    calc((100vw - 330px - 360px - 16px*2 - 16px*2 - 140px) / 8),
-    calc((100vh - 64px - 16px*2 - 170px) / 9)
+    calc((100vw - 894px) / 8),
+    calc((100vh - 266px) / 9)
   );
   /* clamp the result */
   --sq: clamp(40px, var(--sq), 78px);
@@ -99,6 +99,7 @@ button:disabled{ opacity:.4; cursor:not-allowed; }
 }
 
 .boardOuter{
+  display:inline-block;
   border: 10px solid #e9ea5a;
   box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45);
   background: transparent;
