@@ -1,3 +1,11 @@
+
+function pieceImageSrc(piece) {
+  const typeMap = { K:"king", Q:"queen", R:"rook", B:"bishop", N:"knight", P:"pawn" };
+  const color = piece.side === "W" ? "white" : "black";
+  return `imgs/${typeMap[piece.type]}-${color}.png`;
+}
+
+
 import { newGameState } from "./engine/state.js";
 import { getLegalIntents, applyIntent, evaluateGame, serverAdvanceDrawPhase } from "./engine/rules.js";
 import { ACTION_LABEL } from "./engine/rulesSpec.js";
@@ -194,7 +202,17 @@ function renderBoard() {
   cells.forEach((cell) => {
     const sq = cell.dataset.sq;
     const pid = state.board[sq];
-    cell.textContent = pid ? prettyPiece(pid) : "";
+    
+cell.innerHTML = "";
+if (pid) {
+  const piece = state.pieces[pid];
+  const img = document.createElement("img");
+  img.src = pieceImageSrc(piece);
+  img.className = "pieceImg";
+  img.draggable = false;
+  cell.appendChild(img);
+}
+
     cell.classList.toggle("selected", builder?.fromSq === sq);
   });
 }
