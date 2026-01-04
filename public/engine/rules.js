@@ -1010,6 +1010,15 @@ function movePiece(state, moverSide, pieceId, to, opts = {}) {
   delete state.board[from];
   state.board[to] = p.id;
   p.square = to;
+
+  // Pawn promotion: reaching the opposing back rank automatically promotes to a Queen.
+  if (p.type === "P") {
+    const promoteRank = (moverSide === "W") ? 8 : 1;
+    if (Number(to[1]) === promoteRank) {
+      p.type = "Q";
+    }
+  }
+
   return false;
 }
 
