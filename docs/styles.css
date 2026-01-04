@@ -155,10 +155,13 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 
 .hintSmall{ font-size:12px; opacity:.75; min-height:18px; margin-top:6px; }
 
-
 .pieceImg {
-  width: 52px;
-  height: 52px;
+  width: 86%;
+  height: 86%;
+  display: block;
+  margin: 0 auto;
+  object-fit: contain;
+  object-position: center;
   pointer-events: none;
   user-select: none;
 }
