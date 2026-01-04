@@ -814,6 +814,45 @@ function genComboNN(state, side, cardIds) {
   return out;
 }
 
+// KING + KNIGHT combo: the KING moves like a KNIGHT (captures allowed).
+// Note: the reverse direction ("knight moves like king") is covered by COMBO_NX_MORPH
+// when the otherKind is KING.
+function genComboKingKnight(state, side, cardIds) {
+  const out = [];
+  const king = Object.values(state.pieces).find(
+    (p) => p.side === side && p.status === "ACTIVE" && p.type === "K" && p.square
+  );
+  if (!king) return out;
+
+  const from = king.square;
+  const deltas = [
+    [ 2, 1], [ 2,-1], [-2, 1], [-2,-1],
+    [ 1, 2], [ 1,-2], [-1, 2], [-1,-2],
+  ];
+
+  for (const [df, dr] of deltas) {
+    const nf = String.fromCharCode(fileOf(from).charCodeAt(0) + df);
+    const nr = rankOf(from) + dr;
+    if (!inBounds(nf, nr)) continue;
+    const to = sq(nf, nr);
+
+    const occId = state.board[to];
+    if (occId) {
+      const occ = state.pieces[occId];
+      if (occ.side === side) continue; // cannot land on own piece
+    }
+
+    out.push({
+      kind: "TURN",
+      side,
+      play: { type: "COMBO", cardIds },
+      action: { type: "COMBO_KING_KNIGHT", payload: { pieceId: king.id, to } },
+    });
+  }
+
+  return out;
+}
+
 function genComboNXBothWays(state, side, cardIds, otherKind) {
   const out = [];
 
