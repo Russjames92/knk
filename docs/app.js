@@ -71,6 +71,67 @@ function pushLog(line) {
   elLog.textContent = logLines.join("\n");
 }
 
+function sideName(side) {
+  if (chkAI.checked && side === "B") return "AI (Black)";
+  return side === "W" ? "White" : "Black";
+}
+
+function pieceName(pieceId) {
+  const p = state?.pieces?.[pieceId];
+  if (!p) return pieceId;
+  const typeMap = { K: "King", Q: "Queen", R: "Rook", B: "Bishop", N: "Knight", P: "Pawn" };
+  return `${p.side === "W" ? "White" : "Black"} ${typeMap[p.type] || p.type}`;
+}
+
+function squareOrDash(sq) {
+  return sq || "-";
+}
+
+function describeIntent(intent) {
+  const who = sideName(intent.side);
+
+  // Setup intent (no cards)
+  if (intent.kind === "SETUP") {
+    const to = intent.action?.payload?.to;
+    return `${who} sets up: places King at ${squareOrDash(to)} (Knights auto-place adjacent).`;
+  }
+
+  const cards = playLabel(intent);
+  const t = intent.action?.type;
+  const a = intent.action?.payload || {};
+
+  // Base action label
+  let actionText = humanAction(t);
+
+  // Add plain-English details
+  if (t === "PLACE") {
+    actionText = `${actionText}: ${pieceName(a.pieceId)} to ${squareOrDash(a.to)}`;
+  } else if (t === "MOVE_STANDARD" || t?.startsWith("NOBLE_") || t?.startsWith("COMBO_")) {
+    if (a.pieceId && a.to) {
+      actionText = `${actionText}: ${pieceName(a.pieceId)} to ${squareOrDash(a.to)}`;
+    } else if (t === "NOBLE_ROOK_SWAP_BACKRANK") {
+      const A = state?.pieces?.[a.pieceA];
+      const B = state?.pieces?.[a.pieceB];
+      actionText = `${actionText}: swap ${pieceName(a.pieceA)} (${squareOrDash(A?.square)}) with ${pieceName(a.pieceB)} (${squareOrDash(B?.square)})`;
+    } else if (t === "NOBLE_BISHOP_RESURRECT") {
+      actionText = `${actionText}: resurrect ${pieceName(a.resurrectPieceId)} to ${squareOrDash(a.to)}`;
+    } else if (t === "NOBLE_BISHOP_BLOCK_CHECK") {
+      actionText = `${actionText}: King to ${squareOrDash(a.kingTo)}, then ${pieceName(a.move?.pieceId)} to ${squareOrDash(a.move?.to)}`;
+    } else if (t === "COMBO_NN") {
+      if (a.mode === "DOUBLE") {
+        actionText = `${actionText}: ${pieceName(a.double?.pieceId)} to ${squareOrDash(a.double?.moves?.[0]?.to)}, then to ${squareOrDash(a.double?.moves?.[1]?.to)}`;
+      } else if (a.mode === "SPLIT") {
+        actionText = `${actionText}: ${pieceName(a.split?.a?.pieceId)} to ${squareOrDash(a.split?.a?.to)} AND ${pieceName(a.split?.b?.pieceId)} to ${squareOrDash(a.split?.b?.to)}`;
+      }
+    } else if (t === "COMBO_NX_MORPH") {
+      const mode = a.mode === "KNIGHT_AS_X" ? `Knight moves like ${a.otherKind}` : `${a.otherKind} moves like Knight`;
+      actionText = `${actionText} (${mode}): ${pieceName(a.pieceId)} to ${squareOrDash(a.to)}`;
+    }
+  }
+
+  return `${who} played ${cards} → ${actionText}.`;
+}
+
 function sameCards(a, b) {
   if (!a || !b) return false;
   if (a.length !== b.length) return false;
@@ -717,16 +778,13 @@ function stepApply(intent) {
   const after = applyIntent(before, intent);
   state = after;
 
-  const side = intent.side || before.phase.turn?.side || "?";
-  const cid = intent.play?.cardIds?.join(",") || "-";
-  pushLog(`${side} played ${cid} -> ${intent.action?.type || "?"}`);
+  // Plain-English log (includes AI plays + card details)
+  pushLog(describeIntent(intent));
 
   const res = evaluateGame(state);
   state.result = res; // ✅ keep state.result current so AI can run
   
-  if (res?.status === "ENDED") {
-    pushLog(`GAME OVER: ${res.winner} (${res.reason || "capture"})`);
-  }
+  if (res?.status === "ENDED") pushLog(`GAME OVER: ${sideName(res.winner)} (${res.reason || "capture"})`);
 
   setHint("—");
   render();
@@ -734,6 +792,22 @@ function stepApply(intent) {
 
 function tick() {
   if (!state) return;
+
+  // AI handles its own SETUP (Black king placement) when enabled
+  if (chkAI.checked && state.phase.stage === "SETUP" && state.phase.setup.sideToPlace === "B") {
+    try {
+      const intents = getLegalIntents(state, "B");
+      const pick = intents[Math.floor(Math.random() * intents.length)];
+      if (pick) {
+        clearUiSelectionState();
+        stepApply(pick);
+      }
+    } catch (e) {
+      console.error("AI setup error:", e);
+      pushLog(`AI setup error: ${String(e?.message || e)}`);
+    }
+    return;
+  }
 
   if (state.phase.stage === "TURN" && state.phase.turn.step === "DRAW") {
     state = serverAdvanceDrawPhase(state);
