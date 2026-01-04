@@ -187,9 +187,11 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 /* ===== Board Frame / Coordinates (EC-style) ===== */
 .boardFrame{
   /* Square size constrained by available viewport space (no scroll) */
-  --sq: min(
-    max(44px, calc((100vw - 330px - 360px - 16px*2 - 16px*2 - 80px) / 8)),
-    max(44px, calc((100vh - 64px - 16px*2 - 40px) / 9))
+  --sq: calc(
+    min(
+      max(40px, calc((100vw - 330px - 360px - 16px*2 - 16px*2 - 120px) / 8)),
+      max(40px, calc((100vh - 64px - 16px*2 - 120px) / 10.5))
+    ) * 0.88
   );
 
   display:grid;
@@ -203,7 +205,7 @@ pre { white-space:pre-wrap; word-break:break-word; font-size:12px; opacity:.9; }
 
 
 .boardOuter{
-  border: 12px solid #e9ea5a;
+  border: 10px solid #e9ea5a;
   box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45);
   background: transparent; /* prevents yellow gridlines between squares */
   padding: 0;             /* prevents yellow gutters */
