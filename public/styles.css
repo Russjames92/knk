@@ -80,6 +80,9 @@ button:disabled{ opacity:.4; cursor:not-allowed; }
 
 /* ===== EC-style Board Frame / Coordinates ===== */
 .boardFrame{
+  /* Fallback square size (prevents collapse if calc fails) */
+  --sq: 64px;
+
   /* Conservative square size so board always fits without clipping.
      - width budget: viewport minus side panels and gutters
      - height budget: viewport minus header and a little UI padding for labels */
@@ -99,7 +102,7 @@ button:disabled{ opacity:.4; cursor:not-allowed; }
 }
 
 .boardOuter{
-  display:inline-block;
+  display: inline-block;
   border: 10px solid #e9ea5a;
   box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45);
   background: transparent;
