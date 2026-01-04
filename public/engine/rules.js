@@ -95,7 +95,8 @@ function validateIntent(state, intent) {
   if (
     a.type === "MOVE_STANDARD" ||
     a.type === "NOBLE_QUEEN_MOVE_EXTRA_TURN" ||
-    a.type === "NOBLE_KING_ADJ_NO_CAPTURE"
+    a.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN" ||
+    a.type === "NOBLE_KING_ADJ_NO_CAPTURE" || a.type === "NOBLE_KING_BACKRANK_KINGMOVE_NOCAP"
   ) {
     const { pieceId, to } = a.payload;
     assert(pieceId && to, "MOVE requires pieceId/to");
@@ -171,7 +172,8 @@ function applyIntentMut(state, intent) {
   if (!terminal) {
     const turn = state.phase.turn;
 
-    if (intent.action.type === "NOBLE_QUEEN_MOVE_EXTRA_TURN") {
+    if (intent.action.type === "NOBLE_QUEEN_MOVE_EXTRA_TURN" ||
+    a.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN" || intent.action.type === "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN") {
       turn.extraTurnQueue += 1;
     }
 
@@ -286,17 +288,60 @@ function applyAction(state, intent) {
       throw new Error("Unknown COMBO_NN mode");
     }
 
-    case "COMBO_NX_MORPH": {
-      const { move } = a.payload;
-      return movePiece(state, intent.side, move.pieceId, move.to);
-    }
+    
+case "COMBO_NX_MORPH": {
+  const { pieceId, to } = a.payload;
+  return movePiece(state, intent.side, pieceId, to);
+}
 
     case "COMBO_KING_KNIGHT": {
       const { pieceId, to } = a.payload;
       return movePiece(state, intent.side, pieceId, to);
     }
 
-    default:
+    case "NOBLE_KING_BACKRANK_KINGMOVE_NOCAP": {
+  const { pieceId, to } = a.payload;
+  return movePiece(state, intent.side, pieceId, to, { forbidCapture: true });
+}
+
+case "NOBLE_ROOK_SWAP_BACKRANK": {
+  const A = state.pieces[a.payload.pieceA];
+  const B = state.pieces[a.payload.pieceB];
+  const sqA = A.square, sqB = B.square;
+  state.board[sqA] = B.id; B.square = sqA;
+  state.board[sqB] = A.id; A.square = sqB;
+  return false;
+}
+
+case "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN": {
+  const { pieceId, to } = a.payload;
+  // Move any piece standard (captures allowed)
+  return movePiece(state, intent.side, pieceId, to);
+}
+
+case "NOBLE_BISHOP_RESURRECT": {
+  const { resurrectPieceId, to } = a.payload;
+  const p = state.pieces[resurrectPieceId];
+  assert(p && p.status === "CAPTURED", "Bad resurrect target");
+  assert(!state.board[to], "Resurrect square occupied");
+  p.status = "ACTIVE";
+  p.square = to;
+  state.board[to] = p.id;
+  return false;
+}
+
+case "NOBLE_BISHOP_BLOCK_CHECK": {
+  const { kingTo, move } = a.payload;
+  const king = Object.values(state.pieces).find((p) => p.side === intent.side && p.type === "K" && p.status === "ACTIVE");
+  assert(king && king.square, "Missing king");
+  // Step 1: move king
+  const terminal1 = movePiece(state, intent.side, king.id, kingTo);
+  if (terminal1) return true;
+  // Step 2: move any piece standard
+  const terminal2 = movePiece(state, intent.side, move.pieceId, move.to);
+  return terminal2;
+}
+default:
       throw new Error("Unknown action type: " + a.type);
   }
 }
@@ -383,27 +428,37 @@ function cardKind(state, cardId) {
 
 function genSingle(state, side, cardId) {
   const kind = cardKind(state, cardId);
+  const play = { type: "SINGLE", cardIds: [cardId] };
 
-  if (kind === "KNIGHT") {
-    return genMoveStandardForAny(state, side, { type: "SINGLE", cardIds: [cardId] });
-  }
-
+  // PAWN: place pawn OR move an active pawn (standard pawn rules). No combos.
   if (kind === "PAWN") {
     const out = [];
-    // ✅ allow placing a pawn if one is in hand
     out.push(...genPlace(state, side, cardId));
-    // ✅ also allow moving existing pawns (if any are already active)
-    out.push(...genPawnStandard(state, side, { type: "SINGLE", cardIds: [cardId] }));
+    out.push(...genPawnStandard(state, side, play));
     return out;
   }
 
+  // KNIGHT: grants ANY piece permission to make its standard chess move.
+  // Knights are active from game start, so this card does NOT place.
+  if (kind === "KNIGHT") {
+    return genMoveStandardForAny(state, side, play);
+  }
+
+  // KING: Noble only — any back-rank non-pawn piece may move like a standard King, but cannot capture.
+  if (kind === "KING") {
+    return genNobleKingBackrank(state, side, cardId);
+  }
+
+  // ROOK / QUEEN / BISHOP: can PLACE if available + noble actions
   const out = [];
   out.push(...genPlace(state, side, cardId));
 
-  if (kind === "KING") out.push(...genNobleKing(state, side, cardId));
-  if (kind === "ROOK") out.push(...genNobleRook(state, side, cardId));
-  if (kind === "QUEEN") out.push(...genNobleQueen(state, side, cardId));
-  if (kind === "BISHOP") out.push(...genNobleBishop(state, side, cardId));
+  if (kind === "ROOK") out.push(...genNobleRookBackrankSwap(state, side, cardId));
+  if (kind === "QUEEN") out.push(...genNobleQueenAnyMoveExtraTurn(state, side, cardId));
+  if (kind === "BISHOP") {
+    out.push(...genNobleBishopResurrect(state, side, cardId));
+    out.push(...genNobleBishopBlockCheck(state, side, cardId));
+  }
 
   return out;
 }
@@ -413,20 +468,28 @@ function genCombo(state, side, a, b) {
   const kb = cardKind(state, b);
   const cardIds = [a, b];
 
+  // Pawns cannot be played in combos
+  if (ka === "PAWN" || kb === "PAWN") return [];
+
+  // KNIGHT + KNIGHT
   if (ka === "KNIGHT" && kb === "KNIGHT") return genComboNN(state, side, cardIds);
 
-  // KING + KNIGHT: King moves like a knight
+  // KING + KNIGHT: King moves like a Knight (and also allow Knight moves like King via NX morph with otherKind=KING below)
   if ((ka === "KING" && kb === "KNIGHT") || (kb === "KING" && ka === "KNIGHT")) {
     return genComboKingKnight(state, side, cardIds);
   }
 
-  if (ka === "KNIGHT" && kb !== "KNIGHT") return genComboNX(state, side, cardIds, kb);
-  if (kb === "KNIGHT" && ka !== "KNIGHT") return genComboNX(state, side, cardIds, ka);
+  // KNIGHT + X morph: allow EITHER
+  //  - Knight moves as X (KNIGHT_AS_X)
+  //  - X moves as Knight (X_AS_KNIGHT)
+  if (ka === "KNIGHT" && kb !== "KNIGHT") return genComboNXBothWays(state, side, cardIds, kb);
+  if (kb === "KNIGHT" && ka !== "KNIGHT") return genComboNXBothWays(state, side, cardIds, ka);
 
   return [];
 }
 
 /* ------------------ PLACE generation ------------------ */
+ ------------------ */
 
 function genPlace(state, side, cardId) {
   const kind = cardKind(state, cardId);
@@ -496,72 +559,181 @@ function genPawnStandard(state, side, play) {
 
 /* ------------------ Noble abilities ------------------ */
 
-function genNobleKing(state, side, cardId) {
+// KING card noble: any back-rank non-pawn piece may move like a King, but cannot capture.
+function genNobleKingBackrank(state, side, cardId) {
   const out = [];
-  const king = Object.values(state.pieces).find((p) => p.side === side && p.type === "K" && p.status === "ACTIVE");
-  if (!king) return out;
+  const play = { type: "SINGLE", cardIds: [cardId] };
 
-  const from = king.square;
-  const deltas = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
-  for (const [df, dr] of deltas) {
-    const f = fileOf(from).charCodeAt(0) + df;
-    const r = rankOf(from) + dr;
-    const nf = String.fromCharCode(f);
-    if (!inBounds(nf, r)) continue;
-    const to = sq(nf, r);
-    if (!state.board[to]) {
+  const backRank = side === "W" ? 1 : 8;
+  const backrankPieces = Object.values(state.pieces).filter(
+    (p) =>
+      p.side === side &&
+      p.status === "ACTIVE" &&
+      p.square &&
+      Number(p.square[1]) === backRank &&
+      p.type !== "P"
+  );
+
+  const deltas = [
+    [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]
+  ];
+
+  for (const p of backrankPieces) {
+    const from = p.square;
+    for (const [df, dr] of deltas) {
+      const nf = String.fromCharCode(fileOf(from).charCodeAt(0) + df);
+      const nr = rankOf(from) + dr;
+      if (!inBounds(nf, nr)) continue;
+      const to = sq(nf, nr);
+
+      // cannot capture
+      if (state.board[to]) continue;
+
       out.push({
         kind: "TURN",
         side,
-        play: { type: "SINGLE", cardIds: [cardId] },
-        action: { type: "NOBLE_KING_ADJ_NO_CAPTURE", payload: { pieceId: king.id, to } },
+        play,
+        action: { type: "NOBLE_KING_BACKRANK_KINGMOVE_NOCAP", payload: { pieceId: p.id, to } },
       });
     }
   }
+
   return out;
 }
 
-function genNobleRook(state, side, cardId) {
+// ROOK card noble: swap any two back-rank pieces (non-pawns) you control.
+function genNobleRookBackrankSwap(state, side, cardId) {
   const out = [];
-  const rooks = Object.values(state.pieces).filter((p) => p.side === side && p.type === "R" && p.status === "ACTIVE" && p.square);
-  const nonPawns = Object.values(state.pieces).filter((p) => p.side === side && p.type !== "P" && p.status === "ACTIVE" && p.square);
+  const play = { type: "SINGLE", cardIds: [cardId] };
 
-  for (const r of rooks) {
-    for (const other of nonPawns) {
-      if (other.id === r.id) continue;
+  const backRank = side === "W" ? 1 : 8;
+  const pieces = Object.values(state.pieces).filter(
+    (p) =>
+      p.side === side &&
+      p.status === "ACTIVE" &&
+      p.square &&
+      Number(p.square[1]) === backRank &&
+      p.type !== "P"
+  );
+
+  for (let i = 0; i < pieces.length; i++) {
+    for (let j = i + 1; j < pieces.length; j++) {
       out.push({
         kind: "TURN",
         side,
-        play: { type: "SINGLE", cardIds: [cardId] },
-        action: { type: "NOBLE_ROOK_SWAP", payload: { pieceA: r.id, pieceB: other.id } },
+        play,
+        action: { type: "NOBLE_ROOK_SWAP_BACKRANK", payload: { pieceA: pieces[i].id, pieceB: pieces[j].id } },
       });
     }
   }
+
   return out;
 }
 
-function genNobleQueen(state, side, cardId) {
+// QUEEN card noble: any piece (incl pawns) makes a standard move, then extra turn.
+function genNobleQueenAnyMoveExtraTurn(state, side, cardId) {
   const out = [];
-  const queens = Object.values(state.pieces).filter((p) => p.side === side && p.type === "Q" && p.status === "ACTIVE" && p.square);
-  for (const q of queens) {
-    const moves = generateMovesStandard(state, q.id); // [{from,to}]
+  const play = { type: "SINGLE", cardIds: [cardId] };
+
+  const pieces = Object.values(state.pieces).filter(
+    (p) => p.side === side && p.status === "ACTIVE" && p.square
+  );
+
+  for (const p of pieces) {
+    const moves = generateMovesStandard(state, p.id);
     for (const m of moves) {
       out.push({
         kind: "TURN",
         side,
-        play: { type: "SINGLE", cardIds: [cardId] },
-        action: { type: "NOBLE_QUEEN_MOVE_EXTRA_TURN", payload: { pieceId: q.id, to: m.to } },
+        play,
+        action: { type: "NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN", payload: { pieceId: p.id, to: m.to } },
       });
     }
   }
   return out;
 }
 
-function genNobleBishop(state, side, cardId) {
-  return [];
+// BISHOP noble: Resurrect a captured back-rank piece (except King) and place it on your back rank.
+function genNobleBishopResurrect(state, side, cardId) {
+  const out = [];
+  const play = { type: "SINGLE", cardIds: [cardId] };
+  const backRank = side === "W" ? 1 : 8;
+
+  const captured = Object.values(state.pieces).filter(
+    (p) =>
+      p.side === side &&
+      p.status === "CAPTURED" &&
+      p.type !== "K" &&
+      p.type !== "P" // back-rank pieces only
+  );
+  if (!captured.length) return out;
+
+  // Any empty square on back rank
+  for (const f of FILES) {
+    const to = `${f}${backRank}`;
+    if (state.board[to]) continue;
+
+    for (const p of captured) {
+      out.push({
+        kind: "TURN",
+        side,
+        play,
+        action: { type: "NOBLE_BISHOP_RESURRECT", payload: { resurrectPieceId: p.id, to } },
+      });
+    }
+  }
+  return out;
+}
+
+// BISHOP noble: Block Check — only usable if you are in check.
+// Move your king (standard king move), then move any piece standard move.
+function genNobleBishopBlockCheck(state, side, cardId) {
+  if (!state.threat?.inCheck?.[side]) return [];
+
+  const out = [];
+  const play = { type: "SINGLE", cardIds: [cardId] };
+
+  const king = Object.values(state.pieces).find(
+    (p) => p.side === side && p.type === "K" && p.status === "ACTIVE" && p.square
+  );
+  if (!king) return out;
+
+  const kingMoves = generateMovesStandard(state, king.id); // king standard moves
+  const pieces = Object.values(state.pieces).filter((p) => p.side === side && p.status === "ACTIVE" && p.square);
+
+  // We must generate sequences. We simulate king step without "ended turn in check" restriction,
+  // because the second step may resolve check.
+  for (const km of kingMoves) {
+    const tmp = clone(state);
+    const terminal1 = movePiece(tmp, side, king.id, km.to);
+    if (terminal1) {
+      out.push({
+        kind: "TURN",
+        side,
+        play,
+        action: { type: "NOBLE_BISHOP_BLOCK_CHECK", payload: { kingTo: km.to, move: { pieceId: king.id, to: km.to } } },
+      });
+      continue;
+    }
+
+    for (const p of pieces) {
+      const moves = generateMovesStandard(tmp, p.id);
+      for (const m of moves) {
+        out.push({
+          kind: "TURN",
+          side,
+          play,
+          action: { type: "NOBLE_BISHOP_BLOCK_CHECK", payload: { kingTo: km.to, move: { pieceId: p.id, to: m.to } } },
+        });
+      }
+    }
+  }
+
+  return out;
 }
 
 /* ------------------ Combos ------------------ */
+
 
 function genComboNN(state, side, cardIds) {
   const out = [];
@@ -643,10 +815,13 @@ function genComboNN(state, side, cardIds) {
   return out;
 }
 
-function genComboNX(state, side, cardIds, otherKind) {
+function genComboNXBothWays(state, side, cardIds, otherKind) {
   const out = [];
-  const knights = Object.values(state.pieces).filter((p) => p.side === side && p.status === "ACTIVE" && p.type === "N" && p.square);
 
+  // A) KNIGHT moves as X
+  const knights = Object.values(state.pieces).filter(
+    (p) => p.side === side && p.status === "ACTIVE" && p.type === "N" && p.square
+  );
   for (const n of knights) {
     const from = n.square;
     for (const to of genAsOtherDests(state, from, side, otherKind)) {
@@ -654,54 +829,44 @@ function genComboNX(state, side, cardIds, otherKind) {
         kind: "TURN",
         side,
         play: { type: "COMBO", cardIds },
-        action: { type: "COMBO_NX_MORPH", payload: { otherKind, move: { pieceId: n.id, to } } },
+        action: { type: "COMBO_NX_MORPH", payload: { mode: "KNIGHT_AS_X", otherKind, pieceId: n.id, to } },
       });
     }
   }
 
-  return out;
-}
-
-
-function genComboKingKnight(state, side, cardIds) {
-  const out = [];
-  const king = Object.values(state.pieces).find(
-    (p) => p.side === side && p.type === "K" && p.status === "ACTIVE" && p.square
+  // B) X moves as KNIGHT (X is any active piece, including King/Queen/Rook/Bishop; never pawns because pawn combos disallowed)
+  const xs = Object.values(state.pieces).filter(
+    (p) => p.side === side && p.status === "ACTIVE" && p.square && p.type === kindToPieceType(otherKind)
   );
-  if (!king) return out;
-
-  const from = king.square;
-
   const deltas = [
     [ 2, 1], [ 2,-1], [-2, 1], [-2,-1],
     [ 1, 2], [ 1,-2], [-1, 2], [-1,-2],
   ];
-
-  for (const [df, dr] of deltas) {
-    const nf = String.fromCharCode(fileOf(from).charCodeAt(0) + df);
-    const nr = rankOf(from) + dr;
-    if (!inBounds(nf, nr)) continue;
-
-    const to = sq(nf, nr);
-    const occId = state.board[to];
-
-    // Can move to empty square or capture an enemy piece
-    if (!occId) {
-      out.push({
-        kind: "TURN",
-        side,
-        play: { type: "COMBO", cardIds },
-        action: { type: "COMBO_KING_KNIGHT", payload: { pieceId: king.id, to } },
-      });
-    } else {
-      const occ = state.pieces[occId];
-      if (occ.side !== side) {
+  for (const p of xs) {
+    const from = p.square;
+    for (const [df, dr] of deltas) {
+      const nf = String.fromCharCode(fileOf(from).charCodeAt(0) + df);
+      const nr = rankOf(from) + dr;
+      if (!inBounds(nf, nr)) continue;
+      const to = sq(nf, nr);
+      const occId = state.board[to];
+      if (!occId) {
         out.push({
           kind: "TURN",
           side,
           play: { type: "COMBO", cardIds },
-          action: { type: "COMBO_KING_KNIGHT", payload: { pieceId: king.id, to } },
+          action: { type: "COMBO_NX_MORPH", payload: { mode: "X_AS_KNIGHT", otherKind, pieceId: p.id, to } },
         });
+      } else {
+        const occ = state.pieces[occId];
+        if (occ.side !== side) {
+          out.push({
+            kind: "TURN",
+            side,
+            play: { type: "COMBO", cardIds },
+            action: { type: "COMBO_NX_MORPH", payload: { mode: "X_AS_KNIGHT", otherKind, pieceId: p.id, to } },
+          });
+        }
       }
     }
   }
@@ -710,6 +875,7 @@ function genComboKingKnight(state, side, cardIds) {
 }
 
 function genAsOtherDests(state, from, side, otherKind) {
+(state, from, side, otherKind) {
   if (otherKind === "ROOK") return genRayDests(state, from, side, [[1,0],[-1,0],[0,1],[0,-1]]);
   if (otherKind === "BISHOP") return genRayDests(state, from, side, [[1,1],[1,-1],[-1,1],[-1,-1]]);
   if (otherKind === "QUEEN") return genRayDests(state, from, side, [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]);
