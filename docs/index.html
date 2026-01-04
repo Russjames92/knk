@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Knights & Kings</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&display=swap" />
 </head>
 <body>
   <header class="topbar">
@@ -52,7 +53,17 @@
     </section>
 
     <section class="boardWrap">
-      <div id="board" class="board"></div>
+      <div class="boardFrame">
+        <div class="rankLabels" aria-hidden="true">
+          <div>8</div><div>7</div><div>6</div><div>5</div><div>4</div><div>3</div><div>2</div><div>1</div>
+        </div>
+        <div class="boardOuter">
+          <div id="board" class="board"></div>
+        </div>
+        <div class="fileLabels" aria-hidden="true">
+          <div>A</div><div>B</div><div>C</div><div>D</div><div>E</div><div>F</div><div>G</div><div>H</div>
+        </div>
+      </div>
     </section>
 
     <section class="panel">
