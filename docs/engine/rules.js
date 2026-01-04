@@ -15,6 +15,11 @@ export function applyIntent(state, intent) {
 }
 
 export function evaluateGame(state) {
+  // During SETUP, kings may not be on the board yet. Never declare game over here.
+  if (state?.phase?.stage === "SETUP") {
+    return { status: "ONGOING", winner: null, reason: null };
+  }
+
   const pieces = state?.pieces ? Object.values(state.pieces) : [];
   const wK = pieces.find(p => p && p.side === "W" && p.type === "K" && p.status === "ACTIVE");
   const bK = pieces.find(p => p && p.side === "B" && p.type === "K" && p.status === "ACTIVE");
@@ -89,6 +94,12 @@ function validateIntent(state, intent) {
     assert(p && p.side === side, "Bad pieceId");
     assert(p.status === "IN_HAND", "Piece not in hand");
     assert(!state.board[to], "Square occupied");
+
+    // Pawn placement restriction: pawns may only be placed on your own 2nd rank.
+    if (p.type === "P") {
+      const allowedRank = side === "W" ? 2 : 7;
+      assert(Number(to[1]) === allowedRank, "Pawn must be placed on your 2nd rank");
+    }
     return;
   }
 
@@ -498,8 +509,15 @@ function genPlace(state, side, cardId) {
   if (!piece) return [];
 
   const out = [];
+
+  // Pawn placement restriction: pawns may only be placed on your own 2nd rank.
+  // (W -> rank 2, B -> rank 7)
+  const allowedRank = kind === "PAWN" ? (side === "W" ? 2 : 7) : null;
+
   for (const sqr of allSquares()) {
     if (state.board[sqr]) continue;
+    if (allowedRank != null && Number(sqr[1]) !== allowedRank) continue;
+
     out.push({
       kind: "TURN",
       side,
