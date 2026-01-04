@@ -224,29 +224,53 @@ function prettyPiece(pieceId) {
   return `${p.side}${map[p.type]}`;
 }
 
-function renderHand() {
-  elHand.innerHTML = "";
-  if (state.phase.stage !== "TURN") return;
+function cardImageSrc(kind, side) {
+  const typeMap = { KING:"king", QUEEN:"queen", ROOK:"rook", BISHOP:"bishop", KNIGHT:"knight", PAWN:"pawn" };
+  const color = side === "W" ? "white" : "black";
+  return `imgs/${typeMap[kind]}-${color}.png`;
+}
 
-  const side = state.phase.turn.side;
-  const hand = state.hands?.[side] || [];
+function renderHand() {
+  const el = document.getElementById("hand");
+  if (!el) return;
+  el.innerHTML = "";
+  el.classList.add("handGrid");
+
+  const side = state?.turn?.side || "W";
+  const hand = state.hand?.[side] || [];
 
   hand.forEach((cid) => {
-    const chip = document.createElement("div");
-    chip.className = "card";
-    chip.textContent = cardKind(cid) || "CARD";
-    chip.dataset.cid = cid;
+    const card = CARD_DB[cid];
+    const kind = card?.kind || "UNKNOWN";
 
-    chip.classList.toggle("selected", selectedCards.includes(cid));
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "handCard";
+    btn.dataset.cid = cid;
 
-    chip.addEventListener("click", () => {
-      if (lockedPlay) return;
+    if (state.selection.selectedCards.includes(cid)) btn.classList.add("selected");
+
+    const img = document.createElement("img");
+    img.className = "handCardImg";
+    img.alt = kind;
+    img.src = cardImageSrc(kind, side);
+
+    const label = document.createElement("div");
+    label.className = "handCardLabel";
+    label.textContent = kind;
+
+    btn.appendChild(img);
+    btn.appendChild(label);
+
+    btn.addEventListener("click", () => {
       toggleCard(cid);
+      render(); // re-render to reflect selection styling + action availability
     });
 
-    elHand.appendChild(chip);
+    el.appendChild(btn);
   });
 }
+
 
 function toggleCard(cid) {
   if (selectedCards.includes(cid)) selectedCards = selectedCards.filter((x) => x !== cid);
