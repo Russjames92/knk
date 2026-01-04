@@ -1,6 +1,6 @@
 import { newGameState } from "./engine/state.js";
 import { getLegalIntents, applyIntent, evaluateGame, serverAdvanceDrawPhase } from "./engine/rules.js";
-import { ACTION_LABEL, describePlayFromState, describeAction } from "./engine/rulesSpec.js";
+import { ACTION_LABEL } from "./engine/rulesSpec.js";
 
 /* ---------------- DOM ---------------- */
 
@@ -9,7 +9,6 @@ const elHand = document.getElementById("hand");
 const elLog = document.getElementById("log");
 const elDebug = document.getElementById("debug");
 const elHint = document.getElementById("hint");
-const elReject = document.getElementById("rejectReason");
 
 const pillStage = document.getElementById("pillStage");
 const pillTurn = document.getElementById("pillTurn");
@@ -33,7 +32,6 @@ const btnActionCancel = document.getElementById("btnActionCancel");
 
 let state = null;
 let logLines = [];
-let lastReject = "";
 
 let selectedCards = [];
 let lockedPlay = null;       // { type:"SINGLE"|"COMBO", cardIds:[...], side }
@@ -66,11 +64,6 @@ function clearUiSelectionState() {
 /* ---------------- Helpers ---------------- */
 
 function setHint(msg) { elHint.textContent = msg || "—"; }
-function setReject(msg) {
-  lastReject = msg || "";
-  if (elReject) elReject.textContent = lastReject ? ("Blocked: " + lastReject) : "";
-}
-
 
 function pushLog(line) {
   logLines.push(line);
@@ -244,7 +237,19 @@ function closeActionModal() { actionModal.classList.add("hidden"); }
 btnActionCancel.onclick = () => closeActionModal();
 
 function humanAction(type) {
-  return ACTION_LABEL[type] || type;
+  const map = {
+    PLACE: "Place a piece",
+    MOVE_STANDARD: "Standard move",
+    COMBO_NN: "Knight+Knight combo",
+    COMBO_NX_MORPH: "Knight+X combo",
+    COMBO_KING_KNIGHT: "King+Knight combo (King moves like a Knight)",
+    NOBLE_KING_BACKRANK_KINGMOVE_NOCAP: "King Noble (back-rank piece moves like King, no capture)",
+    NOBLE_ROOK_SWAP_BACKRANK: "Rook Noble (swap two back-rank pieces)",
+    NOBLE_QUEEN_ANY_MOVE_EXTRA_TURN: "Queen Noble (any piece standard move + extra turn)",
+    NOBLE_BISHOP_RESURRECT: "Bishop Noble (resurrect captured back-rank piece)",
+    NOBLE_BISHOP_BLOCK_CHECK: "Bishop Noble (block check: king move + standard move)",
+  };
+  return map[type] || ACTION_LABEL?.[type] || type;
 }
 
 /* ---------------- Intent finding ---------------- */
@@ -328,7 +333,6 @@ function onSquareClick(sq) {
     const pick = intents.find((it) => it.action?.payload?.to === sq);
     if (!pick) {
       setHint("Not a legal placement square for these cards.");
-      setReject("No matching PLACE intent for that square.");
       pendingIntent = null;
       updateButtons();
       return;
@@ -344,6 +348,24 @@ function onSquareClick(sq) {
     handleComboNNClick(sq, intents);
     return;
   }
+
+// ROOK swap: pick two back-rank pieces
+if (lockedActionType === "NOBLE_ROOK_SWAP_BACKRANK") {
+  handleSwapClick(sq, intents);
+  return;
+}
+
+// BISHOP block check: king move then any standard move
+if (lockedActionType === "NOBLE_BISHOP_BLOCK_CHECK") {
+  handleBishopBlockCheckClick(sq, intents);
+  return;
+}
+
+// BISHOP resurrect: click destination square on your back rank; if multiple pieces eligible, you'll be prompted
+if (lockedActionType === "NOBLE_BISHOP_RESURRECT") {
+  handleBishopResurrectClick(sq, intents);
+  return;
+}
 
   // Default move-like: from then to
   if (!builder) {
@@ -363,9 +385,6 @@ function onSquareClick(sq) {
 
     if (!pick) {
       setHint("Not legal for these cards.");
-    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
-      ? "You are in check; selected cards produce no check-resolving actions."
-      : "Selected cards produce no legal actions in this position.");
       pendingIntent = null;
       builder.toSq = null;
       updateButtons();
@@ -426,7 +445,6 @@ function handleComboNNClick(sq, intents) {
 
     if (!pick) {
       setHint("Not legal for NN combo.");
-      setReject("No matching NN DOUBLE/SPLIT intent for the chosen squares.");
       pendingIntent = null;
       builder = null;
       updateButtons();
@@ -476,7 +494,6 @@ function handleComboNNClick(sq, intents) {
 
     if (!pick) {
       setHint("Not legal split selection.");
-      setReject("No matching NN SPLIT intent for the chosen pair of moves.");
       pendingIntent = null;
       builder.toSq = null;
       updateButtons();
@@ -491,6 +508,137 @@ function handleComboNNClick(sq, intents) {
   }
 }
 
+
+
+function handleSwapClick(sq, intents) {
+  // First click selects piece A, second selects piece B.
+  if (!builder) {
+    const p = pieceAt(sq);
+    if (!p || p.side !== state.phase.turn.side) return;
+    builder = { mode: "SWAP", firstPieceId: state.board[sq] };
+    setHint("Swap: now click the second piece.");
+    render();
+    return;
+  }
+  if (builder.mode !== "SWAP") return;
+
+  const secondId = state.board[sq];
+  if (!secondId || secondId === builder.firstPieceId) return;
+
+  const pick = intents.find((it) => {
+    const pl = it.action?.payload;
+    if (!pl) return false;
+    const a = pl.pieceA, b = pl.pieceB;
+    return (a === builder.firstPieceId && b === secondId) || (a === secondId && b === builder.firstPieceId);
+  });
+
+  if (!pick) {
+    setHint("Not a legal swap.");
+    pendingIntent = null;
+    builder = null;
+    updateButtons();
+    render();
+    return;
+  }
+
+  pendingIntent = pick;
+  setHint("Legal swap selected. Click Confirm.");
+  updateButtons();
+  render();
+}
+
+function handleBishopBlockCheckClick(sq, intents) {
+  // 1) Pick king destination, 2) pick a piece, 3) pick its destination.
+  if (!builder) {
+    const p = pieceAt(sq);
+    if (!p || p.side !== state.phase.turn.side || p.type !== "K") return;
+    builder = { mode: "BISHOP_BLOCK", kingFromSq: sq, kingToSq: null, moveFromSq: null, moveToSq: null };
+    setHint("Block Check: click where the King will move.");
+    render();
+    return;
+  }
+
+  if (builder.mode !== "BISHOP_BLOCK") return;
+
+  // pick kingTo
+  if (!builder.kingToSq) {
+    builder.kingToSq = sq;
+    setHint("Now click a piece to move (standard move).");
+    render();
+    return;
+  }
+
+  // pick piece to move
+  if (!builder.moveFromSq) {
+    const p = pieceAt(sq);
+    if (!p || p.side !== state.phase.turn.side) return;
+    builder.moveFromSq = sq;
+    setHint("Now click destination for that piece.");
+    render();
+    return;
+  }
+
+  // pick move destination and match intent
+  if (!builder.moveToSq) {
+    builder.moveToSq = sq;
+    const pieceId = state.board[builder.moveFromSq];
+
+    const pick = intents.find((it) => {
+      const pl = it.action?.payload;
+      if (!pl) return false;
+      return pl.kingTo === builder.kingToSq && pl.move?.pieceId === pieceId && pl.move?.to === sq;
+    });
+
+    if (!pick) {
+      setHint("Not legal for Bishop Block Check.");
+      pendingIntent = null;
+      builder.moveToSq = null;
+      updateButtons();
+      render();
+      return;
+    }
+
+    pendingIntent = pick;
+    setHint("Legal Block Check selected. Click Confirm.");
+    updateButtons();
+    render();
+  }
+}
+
+function handleBishopResurrectClick(sq, intents) {
+  const side = state.phase.turn.side;
+  const backRank = side === "W" ? "1" : "8";
+  if (sq[1] !== backRank) {
+    setHint("Resurrect must be placed on your back rank.");
+    return;
+  }
+
+  const options = intents.filter((it) => it.action?.payload?.to === sq);
+  if (!options.length) {
+    setHint("Not a legal resurrect square.");
+    pendingIntent = null;
+    updateButtons();
+    return;
+  }
+
+  // If only one possible piece, take it; otherwise prompt user.
+  let pick = options[0];
+  if (options.length > 1) {
+    const labels = options.map((it, i) => {
+      const pid = it.action.payload.resurrectPieceId;
+      const p = state.pieces[pid];
+      return `${i + 1}: ${p.side}${p.type} (${pid})`;
+    }).join("\n");
+    const ans = window.prompt(`Choose piece to resurrect:\n${labels}`, "1");
+    const idx = Math.max(1, Math.min(options.length, Number(ans || "1"))) - 1;
+    pick = options[idx];
+  }
+
+  pendingIntent = pick;
+  setHint("Legal Resurrect selected. Click Confirm.");
+  updateButtons();
+  render();
+}
 /* ---------------- Buttons ---------------- */
 
 function updateButtons() {
@@ -512,9 +660,6 @@ btnPlaySingle.onclick = () => {
   const types = availableActionTypesForSelection();
   if (!types.length) {
     setHint("Not legal for these cards.");
-    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
-      ? "You are in check; selected cards produce no check-resolving actions."
-      : "Selected cards produce no legal actions in this position.");
     lockedPlay = null;
     return;
   }
@@ -527,9 +672,6 @@ btnPlayCombo.onclick = () => {
   const types = availableActionTypesForSelection();
   if (!types.length) {
     setHint("Not legal for these cards.");
-    setReject(state?.threat?.inCheck?.[state.phase.turn.side]
-      ? "You are in check; selected cards produce no check-resolving actions."
-      : "Selected cards produce no legal actions in this position.");
     lockedPlay = null;
     return;
   }
@@ -544,7 +686,6 @@ btnClear.onclick = () => {
   setupBuilder = null;
   pendingIntent = null;
   setHint("—");
-  setReject("");
   closeActionModal();
   render();
 };
@@ -588,7 +729,6 @@ function stepApply(intent) {
   }
 
   setHint("—");
-  setReject("");
   render();
 }
 
@@ -699,8 +839,7 @@ function startNewGame() {
   setupBuilder = null;
   pendingIntent = null;
 
-  setHint("Starting game… Click a back-rank square to place your King. Knights auto-place adjacent.");
-  setReject("");
+  setHint("Starting game… (click squares to place King, then pick 2 squares for Knights)");
   closeActionModal();
   render();
 
