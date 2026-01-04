@@ -236,8 +236,8 @@ function renderHand() {
   el.innerHTML = "";
   el.classList.add("handGrid");
 
-  const side = state?.turn?.side || "W";
-  const hand = state.hand?.[side] || [];
+  const side = (state?.phase?.stage === "SETUP") ? (state.phase.setup?.sideToPlace || "W") : (state.phase.turn?.side || "W");
+  const hand = state.hands?.[side] || []; 
 
   hand.forEach((cid) => {
     const card = CARD_DB[cid];
@@ -248,7 +248,7 @@ function renderHand() {
     btn.className = "handCard";
     btn.dataset.cid = cid;
 
-    if (state.selection.selectedCards.includes(cid)) btn.classList.add("selected");
+    if (selectedCards.includes(cid)) btn.classList.add("selected");
 
     const img = document.createElement("img");
     img.className = "handCardImg";
