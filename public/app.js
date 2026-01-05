@@ -47,12 +47,14 @@ const btnEndBannerClose = document.getElementById("btnEndBannerClose");
 /* ---------------- Move Animation Layer ---------------- */
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-const victoryAudio = new Audio("/public/trumpet-blast.mp3");
-const defeatAudio  = new Audio("/public/defeat-audio.mp3");
-const victoryBannerSrc = "/public/imgs/vic-banner.png";
-const defeatBannerSrc  = "/public/imgs/def-banner.png";
+const victoryAudio = new Audio("trumpet-blast.mp3");
+const defeatAudio  = new Audio("defeat-audio.mp3");
+const victoryBannerSrc = "imgs/vic-banner.png";
+const defeatBannerSrc  = "imgs/def-banner.png";
 
 let endBannerShown = false;
+let busy = false; // prevents AI / tick re-entrancy during animations
+
 function hideEndBanner(){
   if (!endBanner) return;
   endBanner.classList.add("hidden");
@@ -1094,6 +1096,10 @@ btnReset.onclick = () => startNewGame();
 /* ---------------- Apply + AI + Loop ---------------- */
 
 async function stepApply(intent) {
+  if (busy) return;
+  busy = true;
+  try {
+
   const before = state;
   const after = applyIntent(before, intent);
   state = after;
@@ -1115,10 +1121,15 @@ async function stepApply(intent) {
   setHint("—");
   await animateIntentTransition(before, after, intent);
   render();
+
+  } finally {
+    busy = false;
+  }
 }
 
 async function tick() {
   if (!state) return;
+  if (busy) return;
 
   // Hard stop: never allow any further actions once the game is ended
   if (state?.result?.status === "ENDED" || state?.phase?.stage === "ENDED") {
