@@ -36,9 +36,43 @@ const actionModal = document.getElementById("actionModal");
 const actionModalOptions = document.getElementById("actionModalOptions");
 const btnActionCancel = document.getElementById("btnActionCancel");
 
+// End-game banner (AI mode)
+const endBanner = document.getElementById("endBanner");
+const endBannerImg = document.getElementById("endBannerImg");
+const btnEndBannerNew = document.getElementById("btnEndBannerNew");
+const btnEndBannerClose = document.getElementById("btnEndBannerClose");
+
+
 
 /* ---------------- Move Animation Layer ---------------- */
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+// End-game media (served from /public)
+const victoryAudio = new Audio("./trumpet-blast.mp3");
+const defeatAudio  = new Audio("./defeat-audio.mp3");
+const victoryBannerSrc = "./imgs/vic-banner.png";
+const defeatBannerSrc  = "./imgs/def-banner.png";
+
+let endBannerShown = false;
+function hideEndBanner(){
+  if (!endBanner) return;
+  endBanner.classList.add("hidden");
+}
+function showEndBanner(kind){
+  if (!endBanner || endBannerShown) return;
+  endBannerShown = true;
+
+  const isVictory = kind === "VICTORY";
+  if (endBannerImg) endBannerImg.src = isVictory ? victoryBannerSrc : defeatBannerSrc;
+  endBanner.classList.remove("hidden");
+
+  const a = isVictory ? victoryAudio : defeatAudio;
+  try{
+    a.currentTime = 0;
+    a.play().catch(()=>{});
+  }catch{}
+}
+
 
 // Overlay layer for move animations (UI only)
 const moveLayer = document.createElement("div");
@@ -569,6 +603,17 @@ function openActionModal(actionTypes) {
 function closeActionModal() { actionModal.classList.add("hidden"); }
 btnActionCancel.onclick = () => closeActionModal();
 
+// End banner interactions
+if (endBanner) {
+  endBanner.addEventListener("click", (e) => {
+    // clicking backdrop closes; clicking card/buttons shouldn't unless explicit
+    if (e.target === endBanner.querySelector('.endBannerBackdrop')) hideEndBanner();
+  });
+}
+if (btnEndBannerClose) btnEndBannerClose.onclick = () => hideEndBanner();
+if (btnEndBannerNew) btnEndBannerNew.onclick = () => { hideEndBanner(); startNewGame(); };
+
+
 function humanAction(type) {
   const map = {
     PLACE: "Place a piece",
@@ -1058,6 +1103,12 @@ async function stepApply(intent) {
   
   if (res?.status === "ENDED") pushLog(`GAME OVER: ${sideName(res.winner)} (${res.reason || "capture"})`);
 
+  // AI mode end-game banner + audio (only when playing vs AI)
+  if (chkAI.checked && res?.status === "ENDED") {
+    const kind = (res.winner === "W") ? "VICTORY" : "DEFEAT";
+    showEndBanner(kind);
+  }
+
   setHint("—");
   await animateIntentTransition(before, after, intent);
   render();
@@ -1178,6 +1229,10 @@ let loopHandle = null;
 
 function startNewGame() {
   state = newGameState({ vsAI: chkAI.checked, aiSide: "B" });
+  endBannerShown = false;
+  hideEndBanner();
+  try{ victoryAudio.pause(); victoryAudio.currentTime = 0; }catch{}
+  try{ defeatAudio.pause(); defeatAudio.currentTime = 0; }catch{}
   state.result = evaluateGame(state);
   logLines = [];
   selectedCards = [];
