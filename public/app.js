@@ -38,6 +38,7 @@ const btnActionCancel = document.getElementById("btnActionCancel");
 
 
 /* ---------------- Move Animation Layer ---------------- */
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 // Overlay layer for move animations (UI only)
 const moveLayer = document.createElement("div");
@@ -117,7 +118,7 @@ async function animatePieceTravel({ pieceId, fromSq, toSq, kind }) {
   if (fromImg) fromImg.style.opacity = "0";
   if (kind === "CAPTURE" && toImg) toImg.style.opacity = "0";
 
-  const duration = kind === "PLACE" ? 220 : 260;
+  const duration = kind === "PLACE" ? 380 : 520;
 
   // Lift effect (slight scale-up mid-flight)
   if (kind === "PLACE") {
