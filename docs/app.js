@@ -1117,6 +1117,7 @@ async function runAI() {
     try {
       const next = applyIntent(state, it);
       if (next?.phase?.stage === "ENDED" || next?.result?.status === "ENDED") {
+        await sleep(450);
         await stepApply(it);
         return;
       }
