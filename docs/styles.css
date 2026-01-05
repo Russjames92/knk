@@ -64,6 +64,30 @@ header .rightActions{
   gap:10px;
 }
 
+/* ===== BRAND / LOGO ===== */
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.brandLogo{
+  height:36px;              /* KEY: does NOT grow header */
+  width:auto;
+  object-fit:contain;
+  display:block;
+}
+
+/* Keep text for accessibility / fallback */
+.brandText{
+  position:absolute;
+  left:-9999px;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+}
+
 button{
   appearance:none;
   border:1px solid var(--stroke2);
