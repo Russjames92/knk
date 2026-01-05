@@ -1,4 +1,4 @@
-/* Knights & Kings ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â EC board theme restart
+/* Knights & Kings ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â EC board theme restart
    Goal: NO page scroll, board always fits viewport, EC-style colors + border + labels.
 */
 
@@ -305,12 +305,71 @@ main.layout{
 }
 
 @media (max-width: 920px){
-  /* stack panels under board on narrow screens */
+  /* Mobile / narrow: single column, internal scroll INSIDE the app (body stays locked) */
+  :root{
+    --gap:12px;
+    --panelW: 1fr;
+    --borderW:10px;
+    /* keep board + labels safely within viewport */
+    --boardSize: min(56vh, 92vw, 520px);
+  }
+
   main.layout{
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
-    overflow:hidden;
+    gap: var(--gap);
+    padding:12px;
+    align-items:start;
+
+    /* critical: allow the APP to scroll internally on mobile */
+    overflow:auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
+
+  .boardWrap{ order:1; padding-top:0; }
+  .panel.leftPanel{ order:2; }
+  .panel.rightPanel{ order:3; }
+
+  .panel{
+    padding:14px;
+    border-radius:16px;
+  }
+
+  .panel h2{
+    font-size:28px;
+  }
+
+  /* tighten controls so they don't blow out */
+  button{
+    padding:8px 12px;
+    border-radius:10px;
+    font-size:14px;
+  }
+
+  .pill{
+    font-size:12px;
+    padding:6px 9px;
+  }
+
+  /* labels smaller on phones */
+  .rankLabels, .fileLabels{
+    font-size: clamp(14px, 2.1vh, 22px);
+  }
+
+  /* keep debug/log from taking the whole screen */
+  #log{ max-height: 22vh; }
+  #debug{ max-height: 22vh; }
+
+  /* hand: 2 across on most phones */
+  .handList, .handGrid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+  .handCard{ height:86px; border-radius:14px; }
+  .handCardIcon{ width:40px; height:40px; }
+  .handCardLabel{ font-size:11px; }
+}
   .boardWrap{ order:1; }
   .panel.leftPanel{ order:2; }
   .panel.rightPanel{ order:3; }
