@@ -238,7 +238,7 @@ function renderHand() {
   handEl.innerHTML = '';
   handEl.classList.add('handGrid');
 
-  const hand = st?.hand?.[side] || [];
+  const hand = st?.hands?.[side] || [];
   hand.forEach((cid) => {
     const kind = (cardKind(cid) || '').toLowerCase();
     const card = document.createElement('button');
