@@ -40,30 +40,19 @@ const btnActionCancel = document.getElementById("btnActionCancel");
 const endBanner = document.getElementById("endBanner");
 const endBannerImg = document.getElementById("endBannerImg");
 const btnEndBannerNew = document.getElementById("btnEndBannerNew");
-const btnEndBannerClose = document\.getElementById\("btnEndBannerClose"\);
-
-// Debug: if banner images fail to load, log the resolved URL
-if (endBannerImg) {
-  endBannerImg.addEventListener("error", () => {
-    console.warn("End banner image failed to load:", endBannerImg.src);
-  });
-}
+const btnEndBannerClose = document.getElementById("btnEndBannerClose");
 
 
 
 /* ---------------- Move Animation Layer ---------------- */
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-// End-game media (served from /public root on Firebase/GitHub Pages)
-const ASSET = (p) => new URL(p, window.location.href).href;
-
-// Audio
-const victoryAudio = new Audio(ASSET("trumpet-blast.mp3"));
-const defeatAudio  = new Audio(ASSET("defeat-audio.mp3"));
-
-// Banners
-const victoryBannerSrc = ASSET("imgs/vic-banner.png");
-const defeatBannerSrc  = ASSET("imgs/def-banner.png");
+// End-game media (served from public root; robust for GitHub Pages + Firebase)
+// Using import.meta.url keeps paths correct even when deployed in a subfolder.
+const victoryAudio = new Audio(new URL("./trumpet-blast.mp3", import.meta.url).href);
+const defeatAudio  = new Audio(new URL("./defeat-audio.mp3", import.meta.url).href);
+const victoryBannerSrc = new URL("./imgs/vic-banner.png", import.meta.url).href;
+const defeatBannerSrc  = new URL("./imgs/def-banner.png", import.meta.url).href;
 
 let endBannerShown = false;
 function hideEndBanner(){
