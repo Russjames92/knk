@@ -1,4 +1,4 @@
-/* Knights & Kings â€” responsive UI (desktop + mobile) */
+/* Knights & Kings Ã¢â‚¬â€ responsive UI (desktop + mobile) */
 
 /* =========================
    THEME TOKENS
@@ -448,4 +448,63 @@ main.layout{
   :root{ --boardSize: min(84vw, 480px); }
   button{ font-size:13px; padding:8px 10px; }
   .toggle{ font-size:13px; }
+}
+
+
+/* =========================
+   END GAME BANNER (AI MODE)
+========================= */
+
+.endBanner{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:10001;
+  padding:18px;
+}
+.endBanner.hidden{ display:none; }
+
+.endBannerBackdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(0,0,0,0.68);
+  backdrop-filter: blur(10px);
+}
+
+.endBannerCard{
+  position:relative;
+  z-index:1;
+  width:min(760px, 92vw);
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(10,12,18,0.55);
+  box-shadow: 0 24px 90px rgba(0,0,0,0.6);
+  overflow:hidden;
+  transform: translateY(6px) scale(0.98);
+  opacity:0;
+  animation: endBannerPop 260ms cubic-bezier(.2,.9,.2,1) forwards;
+}
+
+@keyframes endBannerPop{
+  to{ transform: translateY(0) scale(1); opacity:1; }
+}
+
+.endBannerImg{
+  display:block;
+  width:100%;
+  height:auto;
+}
+
+.endBannerActions{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+  padding:12px;
+  background: linear-gradient(180deg, rgba(8,10,14,0.0) 0%, rgba(8,10,14,0.75) 100%);
+}
+
+.endBannerClose{
+  border-color: rgba(255,255,255,0.26);
 }
