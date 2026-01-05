@@ -36,6 +36,232 @@ const actionModal = document.getElementById("actionModal");
 const actionModalOptions = document.getElementById("actionModalOptions");
 const btnActionCancel = document.getElementById("btnActionCancel");
 
+
+/* ---------------- Move Animation Layer ---------------- */
+
+// Overlay layer for move animations (UI only)
+const moveLayer = document.createElement("div");
+moveLayer.id = "moveLayer";
+document.body.appendChild(moveLayer);
+
+function getSquareEl(sq) {
+  return elBoard.querySelector(`.square[data-sq="${sq}"]`);
+}
+
+function getSquareRect(sq) {
+  const el = getSquareEl(sq);
+  if (!el) return null;
+  return el.getBoundingClientRect();
+}
+
+function getPieceImgInSquare(sq) {
+  const el = getSquareEl(sq);
+  if (!el) return null;
+  return el.querySelector("img.pieceImg") || el.querySelector("img");
+}
+
+function createGhostImgForPiece(piece) {
+  const img = document.createElement("img");
+  img.src = pieceImageSrc(piece);
+  img.className = "moveGhost";
+  img.draggable = false;
+  return img;
+}
+
+function animateEl(el, keyframes, options) {
+  return new Promise((resolve) => {
+    const anim = el.animate(keyframes, options);
+    anim.addEventListener("finish", () => resolve(), { once: true });
+  });
+}
+
+async function animatePieceTravel({ pieceId, fromSq, toSq, kind }) {
+  // kind: "MOVE" | "PLACE" | "CAPTURE"
+  const pieceAfter = state?.pieces?.[pieceId];
+  const pieceBefore = lastBeforeState?.pieces?.[pieceId];
+
+  const fromRect = fromSq ? getSquareRect(fromSq) : null;
+  const toRect = toSq ? getSquareRect(toSq) : null;
+  if (!toRect) return;
+
+  const ghostPiece = pieceAfter || pieceBefore;
+  if (!ghostPiece) return;
+
+  const ghost = createGhostImgForPiece(ghostPiece);
+  moveLayer.appendChild(ghost);
+
+  // size based on destination square (matches CSS: 72%)
+  const size = Math.min(toRect.width, toRect.height) * 0.72;
+
+  // Starting position
+  const startRect = fromRect || toRect;
+  const startX = startRect.left + (startRect.width - size) / 2;
+  const startY = startRect.top + (startRect.height - size) / 2;
+
+  // Ending position
+  const endX = toRect.left + (toRect.width - size) / 2;
+  const endY = toRect.top + (toRect.height - size) / 2;
+
+  ghost.style.width = `${size}px`;
+  ghost.style.height = `${size}px`;
+  ghost.style.left = `${startX}px`;
+  ghost.style.top = `${startY}px`;
+
+  // Hide real pieces during animation to prevent "double"
+  const fromImg = fromSq ? getPieceImgInSquare(fromSq) : null;
+  const toImg = toSq ? getPieceImgInSquare(toSq) : null;
+
+  const prevFromOpacity = fromImg?.style.opacity;
+  const prevToOpacity = toImg?.style.opacity;
+
+  if (fromImg) fromImg.style.opacity = "0";
+  if (kind === "CAPTURE" && toImg) toImg.style.opacity = "0";
+
+  const duration = kind === "PLACE" ? 220 : 260;
+
+  // Lift effect (slight scale-up mid-flight)
+  if (kind === "PLACE") {
+    await animateEl(
+      ghost,
+      [
+        { transform: "scale(0.65)", opacity: 0, offset: 0 },
+        { transform: "scale(1.05)", opacity: 1, offset: 0.6 },
+        { transform: "scale(1)", opacity: 1, offset: 1 },
+      ],
+      { duration, easing: "cubic-bezier(.2,.9,.2,1)", fill: "forwards" }
+    );
+  } else {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    await animateEl(
+      ghost,
+      [
+        { transform: "translate(0px, 0px) scale(1)", offset: 0 },
+        { transform: `translate(${dx}px, ${dy}px) scale(1.08)`, offset: 0.55 },
+        { transform: `translate(${dx}px, ${dy}px) scale(1)`, offset: 1 },
+      ],
+      { duration, easing: "cubic-bezier(.2,.85,.25,1)", fill: "forwards" }
+    );
+  }
+
+  // Cleanup
+  ghost.remove();
+  if (fromImg) fromImg.style.opacity = prevFromOpacity ?? "";
+  if (toImg) toImg.style.opacity = prevToOpacity ?? "";
+}
+
+let lastBeforeState = null;
+
+
+/**
+ * Build a list of animation operations from before/after state and intent payload.
+ * Each op: { pieceId, fromSq, toSq, kind }
+ */
+function getAnimOps(before, after, intent) {
+  const ops = [];
+  const t = intent?.action?.type;
+  const a = intent?.action?.payload || {};
+
+  const add = (pieceId, toSq) => {
+    if (!pieceId || !toSq) return;
+    const fromSq = before?.pieces?.[pieceId]?.square || null;
+    const toAfter = after?.pieces?.[pieceId]?.square || toSq;
+
+    // Determine if this was a place (no from square) or a move
+    const kind = fromSq ? "MOVE" : "PLACE";
+
+    // Capture detection: if destination had an enemy piece before and is now gone/inactive
+    const capturedBeforeId = before?.board?.[toSq] || null;
+    const capturedAfterId = after?.board?.[toSq] || null;
+    const capturedWasRemoved = capturedBeforeId && capturedBeforeId !== pieceId && capturedAfterId === pieceId;
+    const finalKind = capturedWasRemoved ? "CAPTURE" : kind;
+
+    ops.push({ pieceId, fromSq, toSq: toAfter, kind: finalKind });
+  };
+
+  if (t === "PLACE") {
+    add(a.pieceId, a.to);
+    return ops;
+  }
+
+  if (t === "NOBLE_ROOK_SWAP_BACKRANK") {
+    const aId = a.pieceA;
+    const bId = a.pieceB;
+    const aTo = before?.pieces?.[bId]?.square;
+    const bTo = before?.pieces?.[aId]?.square;
+    if (aId && aTo) ops.push({ pieceId: aId, fromSq: before.pieces[aId]?.square, toSq: aTo, kind: "MOVE" });
+    if (bId && bTo) ops.push({ pieceId: bId, fromSq: before.pieces[bId]?.square, toSq: bTo, kind: "MOVE" });
+    return ops;
+  }
+
+  if (t === "COMBO_NN") {
+    if (a.mode === "DOUBLE") {
+      const pid = a.double?.pieceId;
+      const m0 = a.double?.moves?.[0]?.to;
+      const m1 = a.double?.moves?.[1]?.to;
+      if (pid && m0) ops.push({ pieceId: pid, fromSq: before?.pieces?.[pid]?.square || null, toSq: m0, kind: "MOVE" , seq: 0});
+      if (pid && m1) ops.push({ pieceId: pid, fromSq: m0 || null, toSq: m1, kind: "MOVE", seq: 1 });
+      return ops;
+    }
+    if (a.mode === "SPLIT") {
+      const sa = a.split?.a;
+      const sb = a.split?.b;
+      if (sa?.pieceId && sa?.to) ops.push({ pieceId: sa.pieceId, fromSq: before?.pieces?.[sa.pieceId]?.square || null, toSq: sa.to, kind: "MOVE" });
+      if (sb?.pieceId && sb?.to) ops.push({ pieceId: sb.pieceId, fromSq: before?.pieces?.[sb.pieceId]?.square || null, toSq: sb.to, kind: "MOVE" });
+      return ops;
+    }
+  }
+
+  if (t === "NOBLE_BISHOP_BLOCK_CHECK") {
+    // King move then standard move
+    const kingId = before?.board?.[a.kingFrom] || null; // may not exist
+    const kingPieceId = Object.keys(before?.pieces || {}).find(pid => before.pieces[pid]?.side === intent.side && before.pieces[pid]?.type === "K");
+    if (kingPieceId && a.kingTo) ops.push({ pieceId: kingPieceId, fromSq: before.pieces[kingPieceId]?.square || null, toSq: a.kingTo, kind: "MOVE", seq: 0 });
+    const mv = a.move;
+    if (mv?.pieceId && mv?.to) ops.push({ pieceId: mv.pieceId, fromSq: before.pieces[mv.pieceId]?.square || null, toSq: mv.to, kind: "MOVE", seq: 1 });
+    return ops;
+  }
+
+  if (t === "NOBLE_BISHOP_RESURRECT") {
+    // resurrect is a "PLACE" feel
+    if (a.resurrectPieceId && a.to) ops.push({ pieceId: a.resurrectPieceId, fromSq: null, toSq: a.to, kind: "PLACE" });
+    return ops;
+  }
+
+  // Default: payload pieceId + to
+  if (a.pieceId && a.to) {
+    // detect capture kind via board before/after
+    const fromSq = before?.pieces?.[a.pieceId]?.square || null;
+    const toSq = a.to;
+    const destBefore = before?.board?.[toSq] || null;
+    const kind = destBefore && destBefore !== a.pieceId ? "CAPTURE" : (fromSq ? "MOVE" : "PLACE");
+    ops.push({ pieceId: a.pieceId, fromSq, toSq, kind });
+    return ops;
+  }
+
+  return ops;
+}
+
+async function animateIntentTransition(before, after, intent) {
+  // Keep access to before pieces for ghost sources
+  lastBeforeState = before;
+
+  const ops = getAnimOps(before, after, intent);
+  if (!ops.length) return;
+
+  // If we have sequenced ops (double-move etc.), run in order
+  const seqOps = ops.filter(o => typeof o.seq === "number").sort((a,b)=>a.seq-b.seq);
+  const parallelOps = ops.filter(o => typeof o.seq !== "number");
+
+  // Run parallel moves first (swap/split), then sequenced (double) if any
+  if (parallelOps.length) {
+    await Promise.all(parallelOps.map(op => animatePieceTravel(op)));
+  }
+  for (const op of seqOps) {
+    await animatePieceTravel(op);
+  }
+}
+
 /* ---------------- State ---------------- */
 
 let state = null;
@@ -381,7 +607,7 @@ function availableActionTypesForSelection() {
 
 /* ---------------- Click handling ---------------- */
 
-function onSquareClick(sq) {
+async function onSquareClick(sq) {
   // SETUP flow (king is 1 click, knights are 2 clicks)
   if (state.phase.stage === "SETUP") {
     const side = state.phase.setup.sideToPlace;
@@ -390,7 +616,7 @@ function onSquareClick(sq) {
     if (state.phase.setup.step === "PLACE_KING") {
       const pick = intents.find((it) => it.action?.payload?.to === sq);
       if (!pick) return;
-      stepApply(pick);
+      await stepApply(pick);
       return;
     }
 
@@ -417,7 +643,7 @@ function onSquareClick(sq) {
         return;
       }
 
-      stepApply(pick);
+      await stepApply(pick);
       return;
     }
 
@@ -796,9 +1022,9 @@ btnClear.onclick = () => {
   render();
 };
 
-btnConfirm.onclick = () => {
+btnConfirm.onclick = async () => {
   if (!pendingIntent) return;
-  stepApply(pendingIntent);
+  await stepApply(pendingIntent);
 
   selectedCards = [];
   lockedPlay = null;
@@ -818,7 +1044,7 @@ btnReset.onclick = () => startNewGame();
 
 /* ---------------- Apply + AI + Loop ---------------- */
 
-function stepApply(intent) {
+async function stepApply(intent) {
   const before = state;
   const after = applyIntent(before, intent);
   state = after;
@@ -832,6 +1058,7 @@ function stepApply(intent) {
   if (res?.status === "ENDED") pushLog(`GAME OVER: ${sideName(res.winner)} (${res.reason || "capture"})`);
 
   setHint("—");
+  await animateIntentTransition(before, after, intent);
   render();
 }
 
@@ -845,7 +1072,7 @@ function tick() {
       const pick = intents[Math.floor(Math.random() * intents.length)];
       if (pick) {
         clearUiSelectionState();
-        stepApply(pick);
+        await stepApply(pick);
       }
     } catch (e) {
       console.error("AI setup error:", e);
