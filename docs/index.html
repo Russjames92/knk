@@ -4,17 +4,33 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Knights & Kings</title>
+
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&display=swap" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">Knights &amp; Kings</div>
-    <div class="status" id="status">Offline (GitHub Pages)</div>
 
+  <header class="topbar">
+    <!-- BRAND -->
+    <div class="brand">
+      <img
+        src="./imgs/k&k-logo-small.png"
+        alt="Knights & Kings"
+        class="brandLogo"
+      />
+      <span class="brandText">Knights &amp; Kings</span>
+    </div>
+
+    <!-- STATUS -->
+    <div class="status" id="status">
+      Offline (GitHub Pages)
+    </div>
+
+    <!-- ACTIONS -->
     <div class="actions">
       <button id="btnNewGame">New Game</button>
       <button id="btnReset">Reset</button>
+
       <label class="toggle">
         <input id="chkAI" type="checkbox" />
         <span>Vs AI (Black)</span>
@@ -23,12 +39,16 @@
   </header>
 
   <main class="layout">
-    <section class="panel">
+
+    <!-- LEFT PANEL -->
+    <section class="panel leftPanel">
       <h2>Game</h2>
+
       <div class="pillRow">
         <span class="pill" id="pillStage">Stage: -</span>
         <span class="pill" id="pillTurn">Turn: -</span>
       </div>
+
       <div class="pillRow">
         <span class="pill" id="pillCheck">Check: -</span>
       </div>
@@ -52,37 +72,46 @@
       <pre class="debug" id="debug"></pre>
     </section>
 
+    <!-- BOARD -->
     <section class="boardWrap">
       <div class="boardFrame">
         <div class="rankLabels" aria-hidden="true">
-          <div>8</div><div>7</div><div>6</div><div>5</div><div>4</div><div>3</div><div>2</div><div>1</div>
+          <div>8</div><div>7</div><div>6</div><div>5</div>
+          <div>4</div><div>3</div><div>2</div><div>1</div>
         </div>
+
         <div class="boardOuter">
           <div id="board" class="board"></div>
         </div>
+
         <div class="fileLabels" aria-hidden="true">
-          <div>A</div><div>B</div><div>C</div><div>D</div><div>E</div><div>F</div><div>G</div><div>H</div>
+          <div>A</div><div>B</div><div>C</div><div>D</div>
+          <div>E</div><div>F</div><div>G</div><div>H</div>
         </div>
       </div>
     </section>
 
-    <section class="panel">
+    <!-- RIGHT PANEL -->
+    <section class="panel rightPanel">
       <h2>Hand</h2>
       <div id="hand" class="hand"></div>
 
       <h3>Log</h3>
       <pre id="log" class="log"></pre>
     </section>
+
   </main>
 
-  <!-- Action chooser modal -->
-  <div id="actionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="actionModalTitle">
+  <!-- ACTION MODAL -->
+  <div id="actionModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modalBackdrop"></div>
     <div class="modalCard">
       <div class="modalHeader">
-        <h3 id="actionModalTitle">Choose your action</h3>
+        <h3>Choose your action</h3>
       </div>
+
       <div id="actionModalOptions" class="modalOptions"></div>
+
       <div class="modalFooter">
         <button id="btnActionCancel" class="modalCancel">Cancel</button>
       </div>
