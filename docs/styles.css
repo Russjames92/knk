@@ -295,62 +295,50 @@ main.layout{
   #debug{ max-height: 30vh; }
 }
 
-
-/* ===== Hand cards (clickable, icon + label) ===== */
-#hand.handGrid{
+/* ===== Hand cards (visual) ===== */
+.handList{
   display:flex;
   flex-wrap:wrap;
-  gap:12px;
+  gap:10px;
   align-items:flex-start;
+  margin:0;
 }
-
 .handCard{
-  width:76px;
-  height:96px;
-  padding:10px 8px 8px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,0.18);
-  background: radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,0.10), rgba(0,0,0,0.05));
-  box-shadow: 0 10px 24px rgba(0,0,0,0.25);
-  color:#e9eef6;
-  cursor:pointer;
+  width:72px;
+  height:92px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.06));
+  box-shadow:0 10px 26px rgba(0,0,0,.35);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
+  padding:10px 8px;
   gap:8px;
-  transition: transform .08s ease, box-shadow .08s ease, border-color .08s ease;
+  cursor:pointer;
+  user-select:none;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
-
-.handCard:hover{
-  transform: translateY(-1px);
-  border-color: rgba(232,238,75,0.6);
-  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
-}
-
+.handCard:hover{ transform:translateY(-1px); border-color:rgba(255,255,255,.26); }
 .handCard.selected{
-  border-color: rgba(232,238,75,0.95);
-  box-shadow: 0 0 0 2px rgba(232,238,75,0.35), 0 14px 30px rgba(0,0,0,0.4);
+  outline:2px solid rgba(229, 233, 93, .9);
+  box-shadow:0 0 0 3px rgba(229, 233, 93, .18), 0 14px 30px rgba(0,0,0,.45);
 }
-
-.handCardImg{
-  width:48px;
-  height:48px;
+.handCard img{
+  width:44px;
+  height:44px;
   object-fit:contain;
-  image-rendering:auto;
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.35));
+  filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));
 }
-
-.handCardLabel{
+.handCard .label{
   font-size:11px;
-  line-height:1;
-  letter-spacing:0.12em;
+  letter-spacing:.08em;
   text-transform:uppercase;
-  opacity:0.95;
+  color:rgba(255,255,255,.86);
 }
 
-/* small screens */
-@media (max-width: 900px){
-  .handCard{ width:68px; height:88px; }
-  .handCardImg{ width:44px; height:44px; }
+@media (max-width: 1000px){
+  .handCard{ width:66px; height:86px; }
+  .handCard img{ width:40px; height:40px; }
 }
