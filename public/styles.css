@@ -1,4 +1,4 @@
-/* Knights & Kings ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â EC board theme restart
+/* Knights & Kings ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â EC board theme restart
    Goal: NO page scroll, board always fits viewport, EC-style colors + border + labels.
 */
 
@@ -373,3 +373,18 @@ main.layout{
 .actionItem:hover{border-color:rgba(235,255,85,0.65);box-shadow:0 0 0 2px rgba(235,255,85,0.18) inset;}
 .actionItem small{display:block;opacity:0.75;margin-top:4px;line-height:1.2;}
 @media (max-width: 520px){.actionList{grid-template-columns:1fr;}}
+
+
+/* ===== Move Animation Layer ===== */
+#moveLayer{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:9998;
+}
+.moveGhost{
+  position:fixed;
+  pointer-events:none;
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,0.55));
+  will-change: transform, opacity;
+}
