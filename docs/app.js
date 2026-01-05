@@ -47,12 +47,14 @@ const btnEndBannerClose = document.getElementById("btnEndBannerClose");
 /* ---------------- Move Animation Layer ---------------- */
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-// End-game media (served from public root; robust for GitHub Pages + Firebase)
-// Using import.meta.url keeps paths correct even when deployed in a subfolder.
-const victoryAudio = new Audio(new URL("./trumpet-blast.mp3", import.meta.url).href);
-const defeatAudio  = new Audio(new URL("./defeat-audio.mp3", import.meta.url).href);
-const victoryBannerSrc = new URL("./imgs/vic-banner.png", import.meta.url).href;
-const defeatBannerSrc  = new URL("./imgs/def-banner.png", import.meta.url).href;
+// End-game media (served from public root)
+// Use document.baseURI so paths work on Firebase Hosting *and* GitHub Pages subpaths.
+const ASSET = (p) => new URL(p, document.baseURI).href;
+
+const victoryAudio = new Audio(ASSET("trumpet-blast.mp3"));
+const defeatAudio  = new Audio(ASSET("defeat-audio.mp3"));
+const victoryBannerSrc = ASSET("imgs/vic-banner.png");
+const defeatBannerSrc  = ASSET("imgs/def-banner.png");
 
 let endBannerShown = false;
 function hideEndBanner(){
@@ -65,6 +67,10 @@ function showEndBanner(kind){
 
   const isVictory = kind === "VICTORY";
   if (endBannerImg) endBannerImg.src = isVictory ? victoryBannerSrc : defeatBannerSrc;
+  if (endBannerImg) {
+    endBannerImg.onload = () => {};
+    endBannerImg.onerror = () => console.warn("End banner image failed to load:", endBannerImg.src);
+  }
   endBanner.classList.remove("hidden");
 
   const a = isVictory ? victoryAudio : defeatAudio;
