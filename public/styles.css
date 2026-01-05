@@ -1,18 +1,16 @@
-/* Knights & Kings ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â EC board theme restart
-   Goal: NO page scroll, board always fits viewport, EC-style colors + border + labels.
-*/
+/* Knights & Kings â€” responsive UI (desktop + mobile) */
 
+/* =========================
+   THEME TOKENS
+========================= */
 :root{
   --bg0:#0b0f16;
-  --bg1:#0f1623;
   --panel:#0d1118cc;
-  --panelSolid:#0d1118;
   --stroke:#ffffff12;
   --stroke2:#ffffff1f;
   --text:#e9eef7;
   --muted:#b7c2d6;
   --navy:#16243a;
-  --navy2:#1e2d48;
   --lightSq:#f4f6f8;
   --darkSq:#1f2e4b;
   --gold:#e6ea5a;
@@ -21,7 +19,6 @@
   --gap:22px;
   --panelW:340px;
 
-  /* Board sizing: keep room for left/right panels and padding */
   --boardSize: min(72vh, 52vw, 720px);
   --borderW:12px;
 }
@@ -31,55 +28,38 @@
 html,body{
   height:100%;
   margin:0;
-  overflow:hidden; /* critical: no page scroll */
+  overflow:hidden; /* keep page locked; we scroll inside main on mobile */
   background: radial-gradient(1200px 700px at 50% 0%, #141b28 0%, var(--bg0) 55%, #070a10 100%);
   color:var(--text);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
-header{
+/* =========================
+   TOP BAR
+========================= */
+header.topbar{
   height:var(--headerH);
   padding:14px 18px;
   display:flex;
   align-items:center;
   justify-content:space-between;
+  gap:14px;
   border-bottom:1px solid var(--stroke);
   background: linear-gradient(180deg, #0c1018 0%, #090c12 100%);
 }
-
-header .leftTitle{
-  font-size:20px;
-  font-weight:800;
-  letter-spacing:.3px;
-}
-
-header .centerStatus{
-  opacity:.85;
-  font-weight:600;
-}
-
-header .rightActions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-/* ===== BRAND / LOGO ===== */
 
 .brand{
   display:flex;
   align-items:center;
   gap:10px;
+  min-width: 44px;
 }
-
 .brandLogo{
-  height:36px;              /* KEY: does NOT grow header */
+  height:36px; /* never increases header */
   width:auto;
   object-fit:contain;
   display:block;
 }
-
-/* Keep text for accessibility / fallback */
 .brandText{
   position:absolute;
   left:-9999px;
@@ -88,19 +68,46 @@ header .rightActions{
   overflow:hidden;
 }
 
+.status{
+  opacity:.85;
+  font-weight:600;
+  font-size:14px;
+  white-space:nowrap;
+}
+
+.actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:nowrap;
+}
+
+.toggle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:700;
+  color:var(--text);
+  user-select:none;
+  white-space:nowrap;
+}
+
 button{
   appearance:none;
   border:1px solid var(--stroke2);
   color:var(--text);
   background: linear-gradient(180deg, #1a2232 0%, #121826 100%);
-  border-radius:10px;
+  border-radius:12px;
   padding:9px 14px;
-  font-weight:700;
+  font-weight:800;
   cursor:pointer;
 }
 button:hover{ border-color:#ffffff33; }
 button:disabled{ opacity:.45; cursor:not-allowed; }
 
+/* =========================
+   APP LAYOUT (DESKTOP)
+========================= */
 main.layout{
   height:calc(100vh - var(--headerH));
   display:grid;
@@ -108,6 +115,7 @@ main.layout{
   gap:var(--gap);
   padding:18px;
   align-items:start;
+  min-height:0;
 }
 
 .panel{
@@ -125,44 +133,33 @@ main.layout{
   letter-spacing:-.5px;
 }
 
-.panel .subpillRow{
+.pillRow{
   display:flex;
   flex-wrap:wrap;
   gap:10px;
   margin:10px 0 16px;
 }
-
 .pill{
   border:1px solid var(--stroke2);
   background:#0b0f16aa;
   padding:6px 10px;
   border-radius:999px;
-  font-weight:700;
-  color:var(--muted);
-  font-size:13px;
-}
-
-.sectionTitle{
-  margin:16px 0 8px;
-  font-size:18px;
   font-weight:800;
-  color:var(--text);
-}
-
-.smallText{
   color:var(--muted);
   font-size:13px;
-  line-height:1.4;
 }
 
-.actionsRow{
+.hint{ font-weight:700; color:var(--text); margin:6px 0 8px; }
+.hintSmall{ color:var(--muted); font-size:13px; min-height:18px; }
+
+.btnRow{
   display:flex;
   gap:10px;
   flex-wrap:wrap;
-  margin-top:14px;
+  margin-top:10px;
 }
 
-#debug{
+.debug, #debug{
   margin-top:14px;
   padding:12px;
   background:#06080dcc;
@@ -176,7 +173,7 @@ main.layout{
   white-space:pre;
 }
 
-#log{
+.log, #log{
   margin-top:12px;
   padding:12px;
   background:#06080dcc;
@@ -190,12 +187,14 @@ main.layout{
   white-space:pre-wrap;
 }
 
-/* ---------- BOARD (EC style) ---------- */
+/* =========================
+   BOARD
+========================= */
 .boardWrap{
   display:flex;
   align-items:center;
   justify-content:center;
-  min-height: 0;
+  min-height:0;
   padding-top:6px;
 }
 
@@ -215,11 +214,10 @@ main.layout{
   grid-template-rows: repeat(8, 1fr);
   align-items:center;
   justify-items:end;
-  gap:0;
   height: calc(var(--boardSize) + (var(--borderW) * 2));
   padding-right:6px;
   font-family: "Cinzel", Georgia, "Times New Roman", serif;
-  font-weight:700;
+  font-weight:800;
   font-size: clamp(18px, 2.4vh, 30px);
   color:#ffffff;
   text-shadow: 0 2px 10px #00000066;
@@ -233,11 +231,10 @@ main.layout{
   grid-template-columns: repeat(8, 1fr);
   align-items:start;
   justify-items:center;
-  gap:0;
   width: calc(var(--boardSize) + (var(--borderW) * 2));
   padding-top:8px;
   font-family: "Cinzel", Georgia, "Times New Roman", serif;
-  font-weight:700;
+  font-weight:800;
   font-size: clamp(18px, 2.4vh, 30px);
   color:#ffffff;
   text-shadow: 0 2px 10px #00000066;
@@ -267,11 +264,8 @@ main.layout{
   display:flex;
   align-items:center;
   justify-content:center;
-  font-weight:900;
   user-select:none;
   position:relative;
-  font-size: clamp(12px, 1.8vh, 20px);
-  color:#fff;
 }
 
 .square.light{ background: var(--lightSq); }
@@ -282,107 +276,21 @@ main.layout{
   outline-offset: -3px;
 }
 
-.square:hover{
-  filter: brightness(1.05);
-}
+.square:hover{ filter: brightness(1.05); }
 
-/* Piece imagery (if you later switch renderBoard() to <img>) */
-.square img{
-  width: 72%;
-  height: 72%;
-  object-fit: contain;
+.square img,
+.square img.pieceImg{
+  width:72%;
+  height:72%;
+  object-fit:contain;
   pointer-events:none;
 }
 
-/* ---------- Responsive ---------- */
-@media (max-width: 1180px){
-  :root{ --panelW: 320px; --boardSize: min(70vh, 50vw, 640px); }
-}
-
-@media (max-width: 1040px){
-  :root{ --panelW: 300px; --boardSize: min(68vh, 54vw, 600px); }
-  main.layout{ gap:16px; padding:14px; }
-}
-
-@media (max-width: 920px){
-  /* Mobile / narrow: single column, internal scroll INSIDE the app (body stays locked) */
-  :root{
-    --gap:12px;
-    --panelW: 1fr;
-    --borderW:10px;
-    /* keep board + labels safely within viewport */
-    --boardSize: min(56vh, 92vw, 520px);
-  }
-
-  main.layout{
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-    gap: var(--gap);
-    padding:12px;
-    align-items:start;
-
-    /* critical: allow the APP to scroll internally on mobile */
-    overflow:auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
-
-  .boardWrap{ order:1; padding-top:0; }
-  .panel.leftPanel{ order:2; }
-  .panel.rightPanel{ order:3; }
-
-  .panel{
-    padding:14px;
-    border-radius:16px;
-  }
-
-  .panel h2{
-    font-size:28px;
-  }
-
-  /* tighten controls so they don't blow out */
-  button{
-    padding:8px 12px;
-    border-radius:10px;
-    font-size:14px;
-  }
-
-  .pill{
-    font-size:12px;
-    padding:6px 9px;
-  }
-
-  /* labels smaller on phones */
-  .rankLabels, .fileLabels{
-    font-size: clamp(14px, 2.1vh, 22px);
-  }
-
-  /* keep debug/log from taking the whole screen */
-  #log{ max-height: 22vh; }
-  #debug{ max-height: 22vh; }
-
-  /* hand: 2 across on most phones */
-  .handList, .handGrid{
-    grid-template-columns:repeat(2, minmax(0, 1fr));
-    gap:10px;
-  }
-  .handCard{ height:86px; border-radius:14px; }
-  .handCardIcon{ width:40px; height:40px; }
-  .handCardLabel{ font-size:11px; }
-}
-  .boardWrap{ order:1; }
-  .panel.leftPanel{ order:2; }
-  .panel.rightPanel{ order:3; }
-  :root{ --boardSize: min(62vh, 92vw, 560px); }
-  #log{ max-height: 30vh; }
-  #debug{ max-height: 30vh; }
-}
-
-/* ===== Hand cards (visual) ===== */
-/* Hand + Cards */
-.panel.rightPanel{display:flex;flex-direction:column;}
-
-#hand{margin-top:14px;}
+/* =========================
+   HAND GRID
+========================= */
+.panel.rightPanel{ display:flex; flex-direction:column; }
+#hand{ margin-top:14px; }
 
 .handList, .handGrid{
   display:grid;
@@ -405,36 +313,35 @@ main.layout{
   cursor:pointer;
   transition:transform .08s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.handCard:hover{transform:translateY(-1px);}
-.handCard.selected{border-color:rgba(235,255,85,0.9); box-shadow:0 0 0 2px rgba(235,255,85,0.25) inset;}
-.handCardIcon{width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35));}
-.handCardLabel{font-size:12px;letter-spacing:0.06em;opacity:0.95;}
-
-/* Keep log visible without forcing app scroll */
-#log{margin-top:14px; max-height:170px; overflow:auto;}
-
-@media (max-width: 1100px){
-  .handList, .handGrid{grid-template-columns:repeat(2, minmax(0, 1fr));}
-  .handCard{height:92px;}
+.handCard:hover{ transform:translateY(-1px); }
+.handCard.selected{
+  border-color:rgba(235,255,85,0.9);
+  box-shadow:0 0 0 2px rgba(235,255,85,0.25) inset;
 }
+.handCardIcon{
+  width:44px;
+  height:44px;
+  object-fit:contain;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35));
+}
+.handCardLabel{ font-size:12px; letter-spacing:0.06em; opacity:0.95; }
 
-/* Action Modal */
+/* =========================
+   MODAL
+========================= */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;}
 .modal.hidden{display:none;}
 .modalBackdrop{position:absolute;inset:0;}
 .modalCard{position:relative;width:min(520px, calc(100vw - 36px));background:rgba(15,18,24,0.92);border:1px solid rgba(255,255,255,0.14);border-radius:18px;box-shadow:0 18px 70px rgba(0,0,0,0.55);backdrop-filter: blur(12px);padding:16px 16px 14px;}
 .modalHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
 .modalHeader h3{margin:0;font-size:18px;letter-spacing:0.02em;}
-.iconBtn{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);cursor:pointer;}
-.iconBtn:hover{background:rgba(255,255,255,0.09);}
-.actionList{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;margin-top:8px;}
-.actionItem{padding:12px 12px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.05);color:#fff;text-align:left;cursor:pointer;}
-.actionItem:hover{border-color:rgba(235,255,85,0.65);box-shadow:0 0 0 2px rgba(235,255,85,0.18) inset;}
-.actionItem small{display:block;opacity:0.75;margin-top:4px;line-height:1.2;}
-@media (max-width: 520px){.actionList{grid-template-columns:1fr;}}
+.modalOptions .modalBtn{ width:100%; margin:6px 0; }
+.modalFooter{ margin-top:12px; display:flex; justify-content:flex-end; }
+.modalCancel{ padding:10px 14px; }
 
-
-/* ===== Move Animation Layer ===== */
+/* =========================
+   MOVE ANIMATION LAYER
+========================= */
 #moveLayer{
   position:fixed;
   inset:0;
@@ -446,4 +353,99 @@ main.layout{
   pointer-events:none;
   filter: drop-shadow(0 10px 14px rgba(0,0,0,0.55));
   will-change: transform, opacity;
+}
+
+/* =========================
+   RESPONSIVE TUNING
+========================= */
+@media (max-width: 1180px){
+  :root{ --panelW: 320px; --boardSize: min(70vh, 50vw, 640px); }
+}
+@media (max-width: 1040px){
+  :root{ --panelW: 300px; --boardSize: min(68vh, 54vw, 600px); }
+  main.layout{ gap:16px; padding:14px; }
+}
+@media (max-width: 920px){
+  /* KEY MOBILE FIX:
+     - single column
+     - main.layout scrolls internally
+     - board fits the screen width
+     - panels never overlap board because everything stays in normal flow
+  */
+  :root{
+    --gap:12px;
+    --borderW:10px;
+    --boardSize: min(78vw, 520px);
+  }
+
+  header.topbar{
+    padding:10px 12px;
+    gap:10px;
+  }
+
+  /* Hide status on phones (it was pushing layout) */
+  .status{ display:none; }
+
+  .actions{
+    gap:8px;
+  }
+
+  button{
+    padding:8px 12px;
+    border-radius:12px;
+    font-size:14px;
+  }
+
+  main.layout{
+    display:flex;
+    flex-direction:column;
+    gap: var(--gap);
+    padding:12px;
+
+    height:calc(100vh - var(--headerH));
+    overflow:auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Ensure these sections stay in flow and never overlay */
+  .boardWrap{ order:1; padding-top:0; }
+  .panel.leftPanel{ order:2; }
+  .panel.rightPanel{ order:3; }
+
+  .panel{
+    padding:14px;
+    border-radius:16px;
+  }
+
+  .panel h2{ font-size:28px; }
+
+  .rankLabels, .fileLabels{
+    font-size: clamp(14px, 2.1vh, 22px);
+  }
+
+  /* Make the board + labels fit narrower screens */
+  .boardFrame{
+    gap:10px 12px;
+  }
+
+  /* Hand becomes 2-across */
+  .handList, .handGrid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+  .handCard{ height:86px; border-radius:14px; }
+  .handCardIcon{ width:40px; height:40px; }
+  .handCardLabel{ font-size:11px; }
+
+  /* Keep debug/log from dominating */
+  #log{ max-height: 24vh; }
+  #debug{ max-height: 20vh; }
+}
+
+/* Smaller phones */
+@media (max-width: 420px){
+  :root{ --boardSize: min(84vw, 480px); }
+  button{ font-size:13px; padding:8px 10px; }
+  .toggle{ font-size:13px; }
 }
