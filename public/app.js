@@ -178,42 +178,196 @@ function pieceAt(sq) {
   const id = state.board[sq];
   return id ? state.pieces[id] : null;
 }
-function renderHand() {
+
+/* ---------------- Render ---------------- */
+
+function renderBoard() {
+  if (!elBoard.dataset.ready) {
+    elBoard.innerHTML = "";
+    const files = ["a","b","c","d","e","f","g","h"];
+    for (let r = 8; r >= 1; r--) {
+      for (let f = 0; f < 8; f++) {
+        const sq = `${files[f]}${r}`;
+        const cell = document.createElement("div");
+        cell.className = "square " + (((f + r) % 2 === 0) ? "light" : "dark");
+        cell.dataset.sq = sq;
+        cell.addEventListener("click", () => onSquareClick(sq));
+        elBoard.appendChild(cell);
+      }
+    }
+    elBoard.dataset.ready = "1";
+  }
+
+  const cells = elBoard.querySelectorAll(".square");
+  cells.forEach((cell) => {
+    const sq = cell.dataset.sq;
+    const pid = state.board[sq];
+    
+cell.innerHTML = "";
+if (pid) {
+  const piece = state.pieces[pid];
+  const img = document.createElement("img");
+  img.src = pieceImageSrc(piece);
+  img.className = "pieceImg";
+  img.draggable = false;
+  cell.appendChild(img);
+}
+
+    cell.classList.toggle("selected", builder?.fromSq === sq);
+  });
+}
+
+function prettyPiece(pieceId) {
+  const p = state.pieces[pieceId];
+  if (!p) return pieceId;
+  const map = { K:"K", Q:"Q", R:"R", B:"B", N:"N", P:"P" };
+  return `${p.side}${map[p.type]}`;
+}
+
+
+function cardIcon(kind) {
+  const k = String(kind || '').toUpperCase();
+  switch (k) {
+    case 'KING': return './imgs/king-white.png';
+    case 'QUEEN': return './imgs/queen-white.png';
+    case 'ROOK': return './imgs/rook-white.png';
+    case 'BISHOP': return './imgs/bishop-white.png';
+    case 'KNIGHT': return './imgs/knight-white.png';
+    case 'PAWN': return './imgs/pawn-white.png';
+    default: return './imgs/pawn-white.png';
+  }
+}
+
+function renderHand(state) {
   const el = document.getElementById('hand');
   if (!el) return;
 
+  // Prefer active turn side; fallback to setup side. This keeps the UI stable.
+  const side = state?.phase?.turn?.side || state?.phase?.setup?.sideToPlace || 'W';
+  const hand = (state?.hands && state.hands[side]) ? state.hands[side] : [];
+
   el.innerHTML = '';
-  el.classList.add('handGrid');
-
-  // During SETUP show the side that is placing; otherwise show the active turn side.
-  const side = (state?.phase?.stage === 'SETUP')
-    ? (state.phase.setup?.sideToPlace || 'W')
-    : (state.phase.turn?.side || 'W');
-
-  const hand = (state?.hand && state.hand[side]) ? state.hand[side] : [];
 
   if (!hand.length) {
     const empty = document.createElement('div');
-    empty.className = 'handEmpty';
-    empty.textContent = (state?.phase?.stage === 'SETUP')
-      ? 'Cards appear after setup.'
-      : '(No cards)';
+    empty.className = 'muted';
+    empty.textContent = '—';
     el.appendChild(empty);
     return;
   }
 
-  for (const cid of hand) {
-    const kind = cardKind(cid) || 'UNKNOWN';
+  hand.forEach((cid) => {
+    const kind = cardKind(cid);
 
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'handCard';
-    card.dataset.cid = cid;
+    if (selectedCards.has(cid)) card.classList.add('selected');
 
     const img = document.createElement('img');
-    img.className = 'handCardImg';
+    img.className = 'handCardIcon';
+    img.src = cardIcon(kind);
     img.alt = kind;
-    img.src = cardImageSrc(kind, side);
+
+    const label = document.createElement('div');
+    label.className = 'handCardLabel';
+    label.textContent = cardLabel(cid);
+
+    card.appendChild(img);
+    card.appendChild(label);
+
+    card.addEventListener('click', () => {
+      // Toggle selection; keep original behavior.
+      if (selectedCards.has(cid)) selectedCards.delete(cid);
+      else selectedCards.add(cid);
+      renderAll();
+    });
+
+    el.appendChild(card);
+  });
+}
+    card.className = 'handCard' + (ui.selectedCards.includes(cardId) ? ' selected' : '');
+    card.title = `${cardLabel(kind)} (${cardId})`;
+    card.dataset.cardId = cardId;
+
+    const img = document.createElement('img');
+    img.className = 'handIcon';
+    img.alt = kind;
+    img.src = cardIcon(kind);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'handLabel';
+    lbl.textContent = cardLabel(kind);
+
+    card.appendChild(img);
+    card.appendChild(lbl);
+
+    card.addEventListener('click', () => {
+      toggleCardSelection(cardId);
+    });
+
+    el.appendChild(card);
+  }
+}
+    card.className = 'handCard' + (ui.selectedCards.includes(cardId) ? ' selected' : '');
+    card.setAttribute('data-card-id', cardId);
+
+    const img = document.createElement('img');
+    img.className = 'handCardIcon';
+    img.src = cardIcon(kind);
+    img.alt = String(kind);
+
+    const label = document.createElement('div');
+    label.className = 'handCardLabel';
+    label.textContent = cardLabel(cardId);
+
+    card.appendChild(img);
+    card.appendChild(label);
+
+    card.addEventListener('click', () => {
+      toggleSelectCard(cardId);
+      renderAll();
+    });
+
+    el.appendChild(card);
+  }
+}
+    card.className = 'handCard';
+    card.dataset.card = cid;
+    card.dataset.kind = kind;
+
+    const selected = state?.selection?.selectedCards?.includes(cid);
+    if (selected) card.classList.add('selected');
+
+    const img = document.createElement('img');
+    img.className = 'handCardIcon';
+    img.alt = kind;
+    img.src = cardIcon(kind);
+
+    const name = document.createElement('div');
+    name.className = 'handCardName';
+    name.textContent = cardLabel(kind);
+
+    card.appendChild(img);
+    card.appendChild(name);
+
+    card.addEventListener('click', () => {
+      toggleSelectCard(cid);
+    });
+
+    el.appendChild(card);
+  }
+}
+    card.dataset.cardId = cardId;
+
+    if (state?.selection?.selectedCards?.includes(cardId)) {
+      card.classList.add('selected');
+    }
+
+    const img = document.createElement('img');
+    img.className = 'handCardIcon';
+    img.src = cardIcon(kind);
+    img.alt = kind;
 
     const label = document.createElement('div');
     label.className = 'handCardLabel';
@@ -222,29 +376,78 @@ function renderHand() {
     card.appendChild(img);
     card.appendChild(label);
 
-    if (state?.selection?.selectedCards?.includes(cid)) {
-      card.classList.add('selected');
-    }
+    card.addEventListener('click', () => {
+      try {
+        const next = toggleCardSelection(state, cardId);
+        setState(next);
+      } catch (e) {
+        logLine(`Selection error: ${e?.message || e}`);
+      }
+    });
 
-    card.addEventListener('click', () => toggleCard(cid));
     el.appendChild(card);
   }
 }
+    card.type = 'button';
+    card.className = 'handCard' + (selection.cards.includes(cid) ? ' selected' : '');
+    card.dataset.cardId = cid;
 
+    const img = document.createElement('img');
+    img.className = 'handCardIcon';
+    img.alt = kind;
+    img.src = cardIcon(kind);
 
-function toggleCard(cid) {
-  if (selectedCards.includes(cid)) selectedCards = selectedCards.filter((x) => x !== cid);
-  else {
-    if (selectedCards.length >= 2) return;
-    selectedCards = [...selectedCards, cid];
+    const label = document.createElement('div');
+    label.className = 'handCardLabel';
+    label.textContent = kind;
+
+    const meta = document.createElement('div');
+    meta.className = 'handCardMeta';
+    meta.textContent = cid;
+
+    card.appendChild(img);
+    card.appendChild(label);
+    card.appendChild(meta);
+
+    card.addEventListener('click', () => {
+      toggleCard(cid);
+    });
+
+    el.appendChild(card);
   }
-  pendingIntent = null;
-  builder = null;
-  updateButtons();
-  renderHand();
-  renderDebug();
 }
+    card.title = `${kind}`;
 
+    const imgSrc = cardIcon(kind);
+    if (imgSrc) {
+      const img = document.createElement('img');
+      img.className = 'handCardIcon';
+      img.alt = kind;
+      img.src = imgSrc;
+      card.appendChild(img);
+    }
+
+    const label = document.createElement('div');
+    label.className = 'handCardLabel';
+    label.textContent = kind;
+    card.appendChild(label);
+
+    card.addEventListener('click', () => {
+      if (selectedCards.has(cardId)) selectedCards.delete(cardId);
+      else {
+        if (selectedCards.size >= 2) {
+          // Cap at 2 selections (single/combo)
+          const first = selectedCards.values().next().value;
+          selectedCards.delete(first);
+        }
+        selectedCards.add(cardId);
+      }
+      render();
+    });
+
+    el.appendChild(card);
+  });
+}
 function renderMeta() {
   pillStage.textContent = `Stage: ${state.phase.stage}`;
   if (state.phase.stage === "SETUP") {
