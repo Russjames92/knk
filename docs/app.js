@@ -1062,7 +1062,7 @@ async function stepApply(intent) {
   render();
 }
 
-function tick() {
+async function tick() {
   if (!state) return;
 
   // AI handles its own SETUP (Black king placement) when enabled
@@ -1093,7 +1093,7 @@ function tick() {
       render();
   
       try {
-        runAI();
+        await runAI();
       } catch (e) {
         console.error("AI error:", e);
         pushLog(`AI error: ${String(e?.message || e)}`);
@@ -1101,7 +1101,7 @@ function tick() {
     }
 }
 
-function runAI() {
+async function runAI() {
   const side = "B";
   const intents = getLegalIntents(state, side);
 
@@ -1116,7 +1116,7 @@ function runAI() {
     try {
       const next = applyIntent(state, it);
       if (next?.phase?.stage === "ENDED" || next?.result?.status === "ENDED") {
-        stepApply(it);
+        await stepApply(it);
         return;
       }
     } catch {
@@ -1169,7 +1169,7 @@ function runAI() {
     return;
   }
 
-  stepApply(best);
+  await stepApply(best);
 }
 
 let loopHandle = null;
@@ -1190,7 +1190,7 @@ function startNewGame() {
   render();
 
   if (loopHandle) clearInterval(loopHandle);
-  loopHandle = setInterval(tick, 180);
+  loopHandle = setInterval(() => { tick(); }, 180);
 }
 
 startNewGame();
