@@ -1,4 +1,4 @@
-/* Knights & Kings ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â EC board theme restart
+/* Knights & Kings ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â EC board theme restart
    Goal: NO page scroll, board always fits viewport, EC-style colors + border + labels.
 */
 
@@ -324,8 +324,8 @@ main.layout{
 }
 .handCard:hover{transform:translateY(-1px);}
 .handCard.selected{border-color:rgba(235,255,85,0.9); box-shadow:0 0 0 2px rgba(235,255,85,0.25) inset;}
-.handCard .cardIcon{width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35));}
-.handCard .cardLabel{font-size:12px;letter-spacing:0.06em;opacity:0.95;}
+.handCardIcon{width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35));}
+.handCardLabel{font-size:12px;letter-spacing:0.06em;opacity:0.95;}
 
 /* Keep log visible without forcing app scroll */
 #log{margin-top:14px; max-height:170px; overflow:auto;}
