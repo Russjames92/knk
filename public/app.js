@@ -47,14 +47,10 @@ const btnEndBannerClose = document.getElementById("btnEndBannerClose");
 /* ---------------- Move Animation Layer ---------------- */
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-// End-game media (served from public root)
-// Use document.baseURI so paths work on Firebase Hosting *and* GitHub Pages subpaths.
-const ASSET = (p) => new URL(p, document.baseURI).href;
-
-const victoryAudio = new Audio(ASSET("trumpet-blast.mp3"));
-const defeatAudio  = new Audio(ASSET("defeat-audio.mp3"));
-const victoryBannerSrc = ASSET("imgs/vic-banner.png");
-const defeatBannerSrc  = ASSET("imgs/def-banner.png");
+const victoryAudio = new Audio("/public/trumpet-blast.mp3");
+const defeatAudio  = new Audio("/public/defeat-audio.mp3");
+const victoryBannerSrc = "/public/imgs/vic-banner.png";
+const defeatBannerSrc  = "/public/imgs/def-banner.png";
 
 let endBannerShown = false;
 function hideEndBanner(){
